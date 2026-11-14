@@ -3,15 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<style>body{margin:0}[hidden]{display:none!important}</style>
-</head>
-<body>
-<title>Ultimate Tic-Tac-Toe</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<title>Advanced Tic-Tac-Toe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: board-first play area with a slim control rail beside it (stacks under on phones). Red = X, moves first; Blue = O. */
+/* Layout: a start menu of game types, then a board-first play area with a control rail beside it (stacks on phones). Red = X, moves first; Blue = O. */
 :root {
   --bg: #eef0f6;
   --surface: #ffffff;
@@ -30,9 +26,10 @@
   --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --turn: var(--red);
   --turn-soft: var(--red-soft);
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root {
     --bg: #11131b; --surface: #1a1d29; --cell: #222636; --cell-hover: #2b3045;
     --ink: #eceef7; --muted: #959bb3; --line: #2d3246;
     --red: #ff5a67; --blue: #5d8dff;
@@ -42,15 +39,9 @@
     color-scheme: dark;
   }
 }
-:root[data-theme="dark"] {
-  --bg: #11131b; --surface: #1a1d29; --cell: #222636; --cell-hover: #2b3045;
-  --ink: #eceef7; --muted: #959bb3; --line: #2d3246;
-  --red: #ff5a67; --blue: #5d8dff;
-  --red-soft: rgba(255, 90, 103, 0.16); --blue-soft: rgba(93, 141, 255, 0.17);
-  --draw-soft: rgba(149, 155, 179, 0.14);
-  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25);
-  color-scheme: dark;
-}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
 body {
   background: var(--bg);
   color: var(--ink);
@@ -63,20 +54,44 @@ body.turn-2 { --turn: var(--blue); --turn-soft: var(--blue-soft); }
 .wrap {
   max-width: 1000px;
   margin: 0 auto;
-  padding-block: 20px 40px;
+  padding-block: max(20px, env(safe-area-inset-top, 0px)) 40px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-header {
-  display: flex; align-items: baseline; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+.r { color: var(--red); }
+.b { color: var(--blue); }
+
+/* ---------- Menu ---------- */
+.menu { max-width: 860px; margin: 0 auto; padding-top: clamp(8px, 4vw, 40px); }
+.menu h1 { font-weight: 800; font-size: clamp(34px, 7vw, 60px); letter-spacing: -0.025em; line-height: 1; }
+.menu .lede { color: var(--muted); font-size: 17px; margin: 12px 0 28px; max-width: 52ch; }
+.modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .modes { grid-template-columns: minmax(0, 1fr); } }
+.mode {
+  appearance: none; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 18px;
+  padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  box-shadow: var(--shadow); transition: border-color 0.15s, transform 0.15s;
 }
-h1 {
-  font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 5vw, 38px);
-  letter-spacing: -0.02em; line-height: 1.05; margin: 0; text-wrap: balance;
+.mode:hover:not(:disabled) { border-color: var(--ink); transform: translateY(-2px); }
+.mode:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.mode:disabled { cursor: default; box-shadow: none; opacity: 0.7; }
+.mode .art { aspect-ratio: 1; width: 100%; max-width: 100%; background: var(--cell); border-radius: 12px; display: grid; place-items: center; }
+.mode .art svg { width: 78%; height: 78%; }
+.mode h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mode p { margin: 0; color: var(--muted); }
+.mode .meta { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.soon { font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--cell); color: var(--muted); border: 1px solid var(--line); }
+.menu-score { margin-top: 22px; color: var(--muted); font-size: 14px; }
+
+/* ---------- Game screen ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px 16px; margin-bottom: 16px;
 }
-h1 .r { color: var(--red); }
-h1 .b { color: var(--blue); }
+.topbar-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.topbar h1 { font-weight: 800; font-size: clamp(24px, 4.5vw, 34px); letter-spacing: -0.02em; line-height: 1.05; }
 .score { display: flex; gap: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
 .score span b { font-size: 17px; margin-left: 4px; }
 .score .sr b { color: var(--red); }
@@ -86,42 +101,12 @@ h1 .b { color: var(--blue); }
 .app { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 24px; align-items: start; }
 @media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } }
 
-.status {
-  display: flex; align-items: center; gap: 10px;
-  font-weight: 600; font-size: 16px; margin-bottom: 12px; min-height: 30px;
-}
-.chip {
-  width: 28px; height: 28px; border-radius: 50%; flex: none;
-  display: grid; place-items: center; background: var(--turn); color: #fff;
-}
+.status { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; margin-bottom: 12px; min-height: 30px; }
+.chip { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--turn); color: #fff; }
 .chip svg { width: 15px; height: 15px; }
 .status .sub { color: var(--muted); font-weight: 500; }
 .thinking .dots::after { content: "…"; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.2; } }
-
-/* The big board */
-.big {
-  width: 100%; max-width: 620px; aspect-ratio: 1;
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(6px, 1.6vw, 12px);
-  background: var(--surface); border-radius: 18px; padding: clamp(6px, 1.6vw, 12px);
-  box-shadow: var(--shadow);
-}
-.small {
-  position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: clamp(2px, 0.6vw, 4px); padding: clamp(3px, 0.8vw, 6px);
-  border-radius: 12px; outline: 2px solid transparent; outline-offset: -2px;
-  transition: outline-color 0.15s, background-color 0.15s, opacity 0.15s;
-  min-width: 0;
-}
-.small.active { outline-color: var(--turn); background: var(--turn-soft); }
-.big.restricted .small:not(.active):not(.done) { opacity: 0.55; }
-.small.done .cell { cursor: default; }
-.small.won-1 { background: var(--red-soft); }
-.small.won-2 { background: var(--blue-soft); }
-.small.drawn { background: var(--draw-soft); }
-.small.winline { outline-color: currentColor; }
-.small.won-1.winline { color: var(--red); }
-.small.won-2.winline { color: var(--blue); }
 
 .cell {
   appearance: none; border: 0; margin: 0; padding: 0; min-width: 0;
@@ -130,18 +115,47 @@ h1 .b { color: var(--blue); }
   transition: background-color 0.1s;
 }
 .cell:disabled { cursor: default; }
-.small.active .cell:not(:disabled):hover { background: var(--cell-hover); }
 .cell:focus-visible { outline: 2px solid var(--turn); outline-offset: 1px; }
 .cell svg { width: 68%; height: 68%; overflow: visible; }
 .cell.p1 { color: var(--red); }
 .cell.p2 { color: var(--blue); }
 .cell.last { box-shadow: inset 0 0 0 2px currentColor; }
+
+/* Normal board */
+.classic {
+  width: 100%; max-width: 480px; aspect-ratio: 1;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(6px, 1.8vw, 12px);
+  background: var(--surface); border-radius: 20px; padding: clamp(8px, 2vw, 14px); box-shadow: var(--shadow);
+}
+.classic .cell { border-radius: 14px; }
+.classic .cell:not(:disabled):hover { background: var(--turn-soft); }
+.classic .cell.win.p1 { background: var(--red-soft); }
+.classic .cell.win.p2 { background: var(--blue-soft); }
+.classic.over .cell:not(.win) svg { opacity: 0.35; }
+
+/* Ultimate board */
+.big {
+  width: 100%; max-width: 620px; aspect-ratio: 1;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(6px, 1.6vw, 12px);
+  background: var(--surface); border-radius: 18px; padding: clamp(6px, 1.6vw, 12px); box-shadow: var(--shadow);
+}
+.small {
+  position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: clamp(2px, 0.6vw, 4px); padding: clamp(3px, 0.8vw, 6px);
+  border-radius: 12px; outline: 2px solid transparent; outline-offset: -2px;
+  transition: outline-color 0.15s, background-color 0.15s, opacity 0.15s; min-width: 0;
+}
+.small.active { outline-color: var(--turn); background: var(--turn-soft); }
+.big.restricted .small:not(.active):not(.done) { opacity: 0.55; }
+.small.active .cell:not(:disabled):hover { background: var(--cell-hover); }
+.small.won-1 { background: var(--red-soft); }
+.small.won-2 { background: var(--blue-soft); }
+.small.drawn { background: var(--draw-soft); }
+.small.won-1.winline { outline-color: var(--red); }
+.small.won-2.winline { outline-color: var(--blue); }
 .small.done .cell svg { opacity: 0.35; }
 .small.done .cell.last svg { opacity: 0.5; }
-
-.mark {
-  position: absolute; inset: 10%; pointer-events: none; display: none;
-}
+.mark { position: absolute; inset: 10%; pointer-events: none; display: none; }
 .small.won-1 .mark, .small.won-2 .mark { display: block; }
 .small.won-1 .mark { color: var(--red); }
 .small.won-2 .mark { color: var(--blue); }
@@ -154,96 +168,133 @@ h1 .b { color: var(--blue); }
 .rail { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .group { display: flex; flex-direction: column; gap: 8px; }
 .label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.seg {
-  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px;
-}
-.seg button {
-  appearance: none; border: 0; background: transparent; color: var(--ink);
-  font: 600 14px var(--font-body); padding: 8px 6px; border-radius: 7px; cursor: pointer;
-}
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--ink); font: 600 14px var(--font-body); padding: 8px 6px; border-radius: 7px; cursor: pointer; }
 .seg button:hover { background: var(--cell); }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 .seg button:focus-visible, .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .seg .opt-red[aria-pressed="true"] { background: var(--red); color: #fff; }
 .seg .opt-blue[aria-pressed="true"] { background: var(--blue); color: #fff; }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.btn {
-  appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-  font: 600 14px var(--font-body); padding: 10px 12px; border-radius: 10px; cursor: pointer;
-}
+.btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 14px var(--font-body); padding: 10px 12px; border-radius: 10px; cursor: pointer; }
 .btn:hover:not(:disabled) { background: var(--cell); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .btn.primary:hover { opacity: 0.9; background: var(--ink); }
+.btn.back { padding: 8px 12px; }
 
 .rules { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
-.rules h2 { font-family: var(--font-display); font-weight: 600; font-size: 17px; margin: 0 0 6px; }
+.rules h2 { font-weight: 600; font-size: 17px; margin: 0 0 6px; }
 .rules ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
 .rules ol b { color: var(--ink); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pop { animation: none; }
-  .thinking .dots::after { animation: none; }
+  .pop, .thinking .dots::after { animation: none; }
   * { transition: none !important; }
 }
 </style>
-
+</head>
+<body>
 <div class="wrap">
-  <header>
-    <h1>Ultimate <span class="r">Tic</span>-<span class="b">Tac</span>-Toe</h1>
-    <div class="score" aria-label="Score">
-      <span class="sr">Red<b id="sc1">0</b></span>
-      <span class="sb">Blue<b id="sc2">0</b></span>
-      <span class="sd">Draws<b id="sc3">0</b></span>
+
+  <!-- ===== Start menu ===== -->
+  <section class="menu" id="menu">
+    <h1>Advanced <span class="r">Tic</span>-<span class="b">Tac</span>-Toe</h1>
+    <p class="lede">Red against Blue. Pick a game, then play a friend on this screen or take on the computer.</p>
+    <div class="modes">
+      <button type="button" class="mode" id="pick-normal" data-game="normal">
+        <div class="art" aria-hidden="true">
+          <svg viewBox="0 0 90 90">
+            <path d="M30 6V84M60 6V84M6 30H84M6 60H84" stroke="var(--line)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M10 10L22 22M22 10L10 22" stroke="var(--red)" stroke-width="4" stroke-linecap="round"/>
+            <path d="M40 40L50 50M50 40L40 50" stroke="var(--red)" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="75" cy="15" r="7" stroke="var(--blue)" stroke-width="4" fill="none"/>
+            <circle cx="15" cy="75" r="7" stroke="var(--blue)" stroke-width="4" fill="none"/>
+          </svg>
+        </div>
+        <span class="meta">1 board · 9 cells</span>
+        <h2>Normal</h2>
+        <p>The classic. Get three in a row.</p>
+      </button>
+      <button type="button" class="mode" id="pick-ultimate" data-game="ultimate">
+        <div class="art" aria-hidden="true">
+          <svg viewBox="0 0 90 90" id="ultArt"></svg>
+        </div>
+        <span class="meta">9 boards · 81 cells</span>
+        <h2>Ultimate</h2>
+        <p>Nine boards in one. Your move decides where your opponent plays next.</p>
+      </button>
+      <button type="button" class="mode" id="pick-supreme" disabled>
+        <div class="art" aria-hidden="true">
+          <svg viewBox="0 0 90 90">
+            <rect x="22" y="6" width="62" height="62" rx="8" fill="none" stroke="var(--line)" stroke-width="3"/>
+            <rect x="14" y="14" width="62" height="62" rx="8" fill="var(--cell)" stroke="var(--line)" stroke-width="3"/>
+            <rect x="6" y="22" width="62" height="62" rx="8" fill="var(--cell)" stroke="var(--muted)" stroke-width="3"/>
+            <text x="37" y="64" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="800" font-size="34" fill="var(--muted)">?</text>
+          </svg>
+        </div>
+        <span class="meta">In development</span>
+        <h2>Supreme <span class="soon">Coming soon</span></h2>
+        <p>The next level up. Not ready yet.</p>
+      </button>
     </div>
-  </header>
+  </section>
 
-  <div class="app">
-    <main>
-      <div class="status" id="status" aria-live="polite">
-        <span class="chip" id="chip"></span>
-        <span><span id="statusMain">Red's turn</span> <span class="sub" id="statusSub"></span></span>
+  <!-- ===== Game screen ===== -->
+  <section id="play" hidden>
+    <div class="topbar">
+      <div class="topbar-left">
+        <button type="button" class="btn back" id="menuBtn">← Menu</button>
+        <h1 id="gameTitle">Ultimate</h1>
       </div>
-      <div class="big" id="big" role="grid" aria-label="Game board"></div>
-    </main>
+      <div class="score" aria-label="Score">
+        <span class="sr">Red<b id="sc1">0</b></span>
+        <span class="sb">Blue<b id="sc2">0</b></span>
+        <span class="sd">Draws<b id="sc3">0</b></span>
+      </div>
+    </div>
 
-    <aside class="rail">
-      <div class="group">
-        <span class="label" id="modeLabel">Opponent</span>
-        <div class="seg" role="group" aria-labelledby="modeLabel">
-          <button type="button" id="mode-ai" data-mode="ai">Computer</button>
-          <button type="button" id="mode-2p" data-mode="2p">Friend</button>
+    <div class="app">
+      <main>
+        <div class="status" id="status" aria-live="polite">
+          <span class="chip" id="chip"></span>
+          <span><span id="statusMain">Red's turn</span> <span class="sub" id="statusSub"></span></span>
         </div>
-      </div>
-      <div class="group" id="aiOpts">
-        <span class="label" id="diffLabel">Difficulty</span>
-        <div class="seg" role="group" aria-labelledby="diffLabel">
-          <button type="button" id="diff-easy" data-diff="easy">Easy</button>
-          <button type="button" id="diff-medium" data-diff="medium">Medium</button>
-          <button type="button" id="diff-hard" data-diff="hard">Hard</button>
+        <div id="board" role="grid" aria-label="Game board"></div>
+      </main>
+
+      <aside class="rail">
+        <div class="group">
+          <span class="label" id="oppLabel">Opponent</span>
+          <div class="seg" role="group" aria-labelledby="oppLabel">
+            <button type="button" id="opp-ai" data-opp="ai">Computer</button>
+            <button type="button" id="opp-2p" data-opp="2p">Friend</button>
+          </div>
         </div>
-        <span class="label" id="sideLabel" style="margin-top:6px">You play</span>
-        <div class="seg" role="group" aria-labelledby="sideLabel">
-          <button type="button" id="side-1" class="opt-red" data-side="1">Red (first)</button>
-          <button type="button" id="side-2" class="opt-blue" data-side="2">Blue</button>
+        <div class="group" id="aiOpts">
+          <span class="label" id="diffLabel">Difficulty</span>
+          <div class="seg" role="group" aria-labelledby="diffLabel">
+            <button type="button" id="diff-easy" data-diff="easy">Easy</button>
+            <button type="button" id="diff-medium" data-diff="medium">Medium</button>
+            <button type="button" id="diff-hard" data-diff="hard">Hard</button>
+          </div>
+          <span class="label" id="sideLabel" style="margin-top:6px">You play</span>
+          <div class="seg" role="group" aria-labelledby="sideLabel">
+            <button type="button" id="side-1" class="opt-red" data-side="1">Red (first)</button>
+            <button type="button" id="side-2" class="opt-blue" data-side="2">Blue</button>
+          </div>
         </div>
-      </div>
-      <div class="actions">
-        <button type="button" class="btn primary" id="newBtn">New game</button>
-        <button type="button" class="btn" id="undoBtn">Undo</button>
-      </div>
-      <section class="rules">
-        <h2>How to play</h2>
-        <ol>
-          <li><b>Win a small board</b> with three in a row to claim it.</li>
-          <li><b>Win the game</b> by claiming three small boards in a row.</li>
-          <li><b>Where you play sends your opponent.</b> Take the top-right cell, and they must move in the top-right board.</li>
-          <li><b>Sent to a finished board?</b> You can play in any open board.</li>
-        </ol>
-      </section>
-    </aside>
-  </div>
+        <div class="actions">
+          <button type="button" class="btn primary" id="newBtn">New game</button>
+          <button type="button" class="btn" id="undoBtn">Undo</button>
+        </div>
+        <section class="rules">
+          <h2>How to play</h2>
+          <ol id="rulesList"></ol>
+        </section>
+      </aside>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -255,82 +306,218 @@ h1 .b { color: var(--blue); }
   const BIG_O = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="2.4" fill="none"/></svg>';
   const NAME = { 1: "Red", 2: "Blue" };
   const POS = ["top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"];
+  const rnd = a => a[(Math.random() * a.length) | 0];
 
-  // ---------- Game engine ----------
-  function newState() {
-    return { cells: new Uint8Array(81), boards: new Uint8Array(9), next: -1, turn: 1, winner: 0, last: -1, line: null };
-  }
-  function clone(s) {
-    return { cells: s.cells.slice(), boards: s.boards.slice(), next: s.next, turn: s.turn, winner: s.winner, last: s.last, line: s.line };
-  }
   function wins(arr, off, p) {
     for (const l of LINES) if (arr[off+l[0]] === p && arr[off+l[1]] === p && arr[off+l[2]] === p) return l;
     return null;
   }
-  function legal(s) {
-    const out = [];
-    if (s.winner) return out;
-    if (s.next >= 0) {
-      const o = s.next * 9;
-      for (let c = 0; c < 9; c++) if (!s.cells[o+c]) out.push(o+c);
+
+  // ================= Normal (classic 3x3) =================
+  const Normal = {
+    title: "Normal",
+    rules: [
+      "<b>Take turns</b> placing your mark. Red goes first.",
+      "<b>Get three in a row</b> across, down or diagonally to win.",
+      "<b>Board full</b> with no three in a row? It's a draw."
+    ],
+    newState: () => ({ cells: new Uint8Array(9), turn: 1, winner: 0, last: -1, line: null }),
+    clone: s => ({ cells: s.cells.slice(), turn: s.turn, winner: s.winner, last: s.last, line: s.line }),
+    legal(s) {
+      const out = [];
+      if (s.winner) return out;
+      for (let i = 0; i < 9; i++) if (!s.cells[i]) out.push(i);
       return out;
-    }
-    for (let b = 0; b < 9; b++) {
-      if (s.boards[b]) continue;
-      const o = b * 9;
-      for (let c = 0; c < 9; c++) if (!s.cells[o+c]) out.push(o+c);
-    }
-    return out;
-  }
-  function apply(s, m) {
-    const p = s.turn, b = (m / 9) | 0, c = m % 9, o = b * 9;
-    s.cells[m] = p;
-    if (wins(s.cells, o, p)) s.boards[b] = p;
-    else {
-      let full = true;
-      for (let i = 0; i < 9; i++) if (!s.cells[o+i]) { full = false; break; }
-      if (full) s.boards[b] = 3;
-    }
-    if (s.boards[b] === p) {
-      const l = wins(s.boards, 0, p);
+    },
+    apply(s, m) {
+      const p = s.turn;
+      s.cells[m] = p;
+      const l = wins(s.cells, 0, p);
       if (l) { s.winner = p; s.line = l; }
+      else if (s.cells.every(v => v)) s.winner = 3;
+      s.turn = 3 - p;
+      s.last = m;
+    },
+    // Perfect play: returns { score, moves } from the point of view of the player to move.
+    solve(s, depth) {
+      let best = -Infinity, bestMoves = [];
+      for (const m of Normal.legal(s)) {
+        const t = Normal.clone(s);
+        Normal.apply(t, m);
+        const v = t.winner === 3 ? 0 : t.winner ? 10 - depth : -Normal.solve(t, depth + 1).score;
+        if (v > best) { best = v; bestMoves = [m]; } else if (v === best) bestMoves.push(m);
+      }
+      return { score: best, moves: bestMoves };
+    },
+    ai(s, diff) {
+      const moves = Normal.legal(s);
+      const winNow = moves.find(m => { const t = Normal.clone(s); Normal.apply(t, m); return t.winner === s.turn; });
+      if (diff === "easy") {
+        if (winNow !== undefined && Math.random() < 0.6) return winNow;
+        return rnd(moves);
+      }
+      if (diff === "medium" && Math.random() < 0.35) return winNow !== undefined ? winNow : rnd(moves);
+      return rnd(Normal.solve(s, 0).moves);
+    },
+    hint: (s, n) => n ? "Get three in a row." : "Red goes first.",
+    drawText: "The board is full and nobody got three in a row.",
+    delay: 350,
+
+    build(root) {
+      root.className = "classic";
+      this.cellEls = [];
+      for (let i = 0; i < 9; i++) {
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "cell"; btn.id = "cell-" + i; btn.dataset.m = i;
+        root.appendChild(btn); this.cellEls.push(btn);
+      }
+    },
+    render(root, s, moves, locked, popMove) {
+      root.classList.toggle("over", !!s.winner);
+      for (let m = 0; m < 9; m++) {
+        const el = this.cellEls[m], v = s.cells[m];
+        drawCell(el, v, m === popMove);
+        el.className = "cell" + (v ? " p" + v : "") + (m === s.last && !s.winner ? " last" : "") + (s.line && s.line.includes(m) ? " win" : "");
+        el.disabled = !moves.has(m) || locked;
+        el.setAttribute("aria-label", POS[m] + " cell" + (v ? ", " + NAME[v] : ""));
+      }
     }
-    if (!s.winner) {
-      let all = true;
-      for (let i = 0; i < 9; i++) if (!s.boards[i]) { all = false; break; }
-      if (all) s.winner = 3;
+  };
+
+  // ================= Ultimate (9 boards) =================
+  const Ultimate = {
+    title: "Ultimate",
+    rules: [
+      "<b>Win a small board</b> with three in a row to claim it.",
+      "<b>Win the game</b> by claiming three small boards in a row.",
+      "<b>Where you play sends your opponent.</b> Take the top-right cell, and they must move in the top-right board.",
+      "<b>Sent to a finished board?</b> You can play in any open board."
+    ],
+    newState: () => ({ cells: new Uint8Array(81), boards: new Uint8Array(9), next: -1, turn: 1, winner: 0, last: -1, line: null }),
+    clone: s => ({ cells: s.cells.slice(), boards: s.boards.slice(), next: s.next, turn: s.turn, winner: s.winner, last: s.last, line: s.line }),
+    legal(s) {
+      const out = [];
+      if (s.winner) return out;
+      if (s.next >= 0) {
+        const o = s.next * 9;
+        for (let c = 0; c < 9; c++) if (!s.cells[o+c]) out.push(o+c);
+        return out;
+      }
+      for (let b = 0; b < 9; b++) {
+        if (s.boards[b]) continue;
+        const o = b * 9;
+        for (let c = 0; c < 9; c++) if (!s.cells[o+c]) out.push(o+c);
+      }
+      return out;
+    },
+    apply(s, m) {
+      const p = s.turn, b = (m / 9) | 0, c = m % 9, o = b * 9;
+      s.cells[m] = p;
+      if (wins(s.cells, o, p)) s.boards[b] = p;
+      else {
+        let full = true;
+        for (let i = 0; i < 9; i++) if (!s.cells[o+i]) { full = false; break; }
+        if (full) s.boards[b] = 3;
+      }
+      if (s.boards[b] === p) {
+        const l = wins(s.boards, 0, p);
+        if (l) { s.winner = p; s.line = l; }
+      }
+      if (!s.winner) {
+        let all = true;
+        for (let i = 0; i < 9; i++) if (!s.boards[i]) { all = false; break; }
+        if (all) s.winner = 3;
+      }
+      s.next = s.boards[c] ? -1 : c;
+      s.turn = 3 - p;
+      s.last = m;
+    },
+    ai(s, diff) {
+      if (diff === "easy") {
+        const moves = Ultimate.legal(s);
+        if (Math.random() < 0.5) {
+          const good = moves.filter(m => {
+            const b = (m / 9) | 0;
+            s.cells[m] = s.turn;
+            const w = !!wins(s.cells, b * 9, s.turn);
+            s.cells[m] = 0;
+            return w;
+          });
+          if (good.length) return rnd(good);
+        }
+        return rnd(moves);
+      }
+      return mcts(Ultimate, s, diff === "medium" ? 200 : 1300);
+    },
+    hint(s, n) {
+      if (s.next >= 0) return "Play in the " + POS[s.next] + " board.";
+      return n ? "Play in any open board." : "Red goes first. Play anywhere.";
+    },
+    drawText: "No one can line up three boards.",
+    delay: 280,
+
+    build(root) {
+      root.className = "big";
+      this.cellEls = []; this.smallEls = [];
+      for (let b = 0; b < 9; b++) {
+        const sb = document.createElement("div");
+        sb.className = "small";
+        sb.setAttribute("role", "rowgroup");
+        sb.setAttribute("aria-label", POS[b] + " board");
+        for (let c = 0; c < 9; c++) {
+          const btn = document.createElement("button");
+          btn.type = "button"; btn.className = "cell"; btn.id = "cell-" + (b * 9 + c); btn.dataset.m = b * 9 + c;
+          sb.appendChild(btn); this.cellEls.push(btn);
+        }
+        const mk = document.createElement("div");
+        mk.className = "mark";
+        sb.appendChild(mk);
+        root.appendChild(sb); this.smallEls.push(sb);
+      }
+    },
+    render(root, s, moves, locked, popMove) {
+      for (let m = 0; m < 81; m++) {
+        const el = this.cellEls[m], v = s.cells[m];
+        drawCell(el, v, m === popMove);
+        el.className = "cell" + (v ? " p" + v : "") + (m === s.last ? " last" : "");
+        el.disabled = !moves.has(m) || locked;
+        el.setAttribute("aria-label", POS[m % 9] + " cell of " + POS[(m / 9) | 0] + " board" + (v ? ", " + NAME[v] : ""));
+      }
+      root.classList.toggle("restricted", s.next >= 0 && !s.winner);
+      for (let b = 0; b < 9; b++) {
+        const st = s.boards[b], sb = this.smallEls[b];
+        sb.className = "small" +
+          (st ? " done" : "") +
+          (st === 1 ? " won-1" : st === 2 ? " won-2" : st === 3 ? " drawn" : "") +
+          (!s.winner && !st && (s.next === b || s.next < 0) ? " active" : "") +
+          (s.line && s.line.includes(b) ? " winline" : "");
+        const mk = sb.lastChild;
+        if (mk.dataset.v !== String(st)) {
+          mk.innerHTML = st === 1 ? BIG_X : st === 2 ? BIG_O : "";
+          mk.dataset.v = st;
+          if (mk.firstChild) mk.firstChild.classList.add("pop");
+        }
+      }
     }
-    s.next = s.boards[c] ? -1 : c;
-    s.turn = 3 - p;
-    s.last = m;
+  };
+
+  function drawCell(el, v, pop) {
+    if (el.dataset.v === String(v)) return;
+    el.innerHTML = v === 1 ? X_SVG : v === 2 ? O_SVG : "";
+    el.dataset.v = v;
+    if (pop && el.firstChild) el.firstChild.classList.add("pop");
   }
 
-  // ---------- Computer player ----------
-  function winsSmall(s, m) {
-    const b = (m / 9) | 0;
-    s.cells[m] = s.turn;
-    const w = !!wins(s.cells, b * 9, s.turn);
-    s.cells[m] = 0;
-    return w;
-  }
-  function easyMove(s) {
-    const moves = legal(s);
-    if (Math.random() < 0.5) {
-      const good = moves.filter(m => winsSmall(s, m));
-      if (good.length) return good[(Math.random() * good.length) | 0];
-    }
-    return moves[(Math.random() * moves.length) | 0];
-  }
-  function mcts(root, ms) {
-    const moves = legal(root);
-    // Take an immediate game win if there is one.
-    for (const m of moves) { const t = clone(root); apply(t, m); if (t.winner === root.turn) return m; }
+  // Monte Carlo tree search, used by the Ultimate computer player.
+  function mcts(G, root, ms) {
+    const moves = G.legal(root);
+    for (const m of moves) { const t = G.clone(root); G.apply(t, m); if (t.winner === root.turn) return m; }
     const rootNode = { m: -1, p: 3 - root.turn, parent: null, children: [], untried: moves.slice(), w: 0, n: 0 };
     const end = performance.now() + ms;
     while (performance.now() < end) {
       for (let k = 0; k < 40; k++) {
         let node = rootNode;
-        const s = clone(root);
+        const s = G.clone(root);
         while (!node.untried.length && node.children.length) {
           let best = null, bv = -Infinity;
           const ln = Math.log(node.n);
@@ -339,7 +526,7 @@ h1 .b { color: var(--blue); }
             if (v > bv) { bv = v; best = ch; }
           }
           node = best;
-          apply(s, node.m);
+          G.apply(s, node.m);
         }
         if (node.untried.length) {
           const i = (Math.random() * node.untried.length) | 0;
@@ -347,15 +534,12 @@ h1 .b { color: var(--blue); }
           node.untried[i] = node.untried[node.untried.length - 1];
           node.untried.pop();
           const mover = s.turn;
-          apply(s, m);
-          const ch = { m, p: mover, parent: node, children: [], untried: legal(s), w: 0, n: 0 };
+          G.apply(s, m);
+          const ch = { m, p: mover, parent: node, children: [], untried: G.legal(s), w: 0, n: 0 };
           node.children.push(ch);
           node = ch;
         }
-        while (!s.winner) {
-          const lm = legal(s);
-          apply(s, lm[(Math.random() * lm.length) | 0]);
-        }
+        while (!s.winner) { const lm = G.legal(s); G.apply(s, lm[(Math.random() * lm.length) | 0]); }
         const w = s.winner;
         while (node) {
           node.n++;
@@ -368,139 +552,95 @@ h1 .b { color: var(--blue); }
     for (const ch of rootNode.children) if (!best || ch.n > best.n) best = ch;
     return best ? best.m : moves[0];
   }
-  function aiMove(s, diff) {
-    if (diff === "easy") return easyMove(s);
-    if (diff === "medium") return mcts(s, 200);
-    return mcts(s, 1300);
-  }
 
-  // ---------- App state ----------
-  let state = newState();
+  // ================= App =================
+  const GAMES = { normal: Normal, ultimate: Ultimate };
+  let gameKey = "ultimate";
+  let G = Ultimate;
+  let state = G.newState();
   let history = [];
-  let settings = { mode: "ai", diff: "medium", side: 1 };
-  let score = { 1: 0, 2: 0, 3: 0 };
-  let thinking = false;
-  let gameId = 0;
-  let counted = false;
+  let settings = { opp: "ai", diff: "medium", side: 1 };
+  let score = { normal: { 1: 0, 2: 0, 3: 0 }, ultimate: { 1: 0, 2: 0, 3: 0 } };
+  let thinking = false, gameId = 0, counted = false;
 
   try {
-    const saved = JSON.parse(localStorage.getItem("uttt-settings") || "null");
-    if (saved) settings = Object.assign(settings, saved);
-    const sc = JSON.parse(localStorage.getItem("uttt-score") || "null");
-    if (sc) score = Object.assign(score, sc);
+    const st = JSON.parse(localStorage.getItem("att-settings") || "null");
+    if (st) settings = Object.assign(settings, st);
+    const sc = JSON.parse(localStorage.getItem("att-score") || "null");
+    if (sc) for (const k in score) if (sc[k]) score[k] = Object.assign(score[k], sc[k]);
   } catch (e) {}
   function save() {
     try {
-      localStorage.setItem("uttt-settings", JSON.stringify(settings));
-      localStorage.setItem("uttt-score", JSON.stringify(score));
+      localStorage.setItem("att-settings", JSON.stringify(settings));
+      localStorage.setItem("att-score", JSON.stringify(score));
     } catch (e) {}
   }
 
-  // ---------- Build DOM ----------
-  const big = document.getElementById("big");
-  const smalls = [], cells = [];
-  for (let b = 0; b < 9; b++) {
-    const sb = document.createElement("div");
-    sb.className = "small";
-    sb.setAttribute("role", "rowgroup");
-    sb.setAttribute("aria-label", POS[b] + " board");
-    for (let c = 0; c < 9; c++) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "cell";
-      btn.id = "cell-" + (b * 9 + c);
-      btn.dataset.m = b * 9 + c;
-      sb.appendChild(btn);
-      cells.push(btn);
-    }
-    const mk = document.createElement("div");
-    mk.className = "mark";
-    sb.appendChild(mk);
-    big.appendChild(sb);
-    smalls.push(sb);
-  }
+  const $ = id => document.getElementById(id);
+  const board = $("board");
+  const isComputerTurn = () => settings.opp === "ai" && !state.winner && state.turn !== settings.side;
 
-  const isComputerTurn = () => settings.mode === "ai" && !state.winner && state.turn !== settings.side;
+  // Small Ultimate illustration on the menu card.
+  (function drawUltArt() {
+    const svg = $("ultArt");
+    let h = '<path d="M30 4V86M60 4V86M4 30H86M4 60H86" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round"/>';
+    for (let b = 0; b < 9; b++) {
+      const ox = (b % 3) * 30 + 5, oy = ((b / 3) | 0) * 30 + 5;
+      h += `<path d="M${ox+6.7} ${oy+1}V${oy+19}M${ox+13.3} ${oy+1}V${oy+19}M${ox+1} ${oy+6.7}H${ox+19}M${ox+1} ${oy+13.3}H${ox+19}" stroke="var(--line)" stroke-width="1.2"/>`;
+    }
+    h += '<path d="M40 40L50 50M50 40L40 50" stroke="var(--red)" stroke-width="3.5" stroke-linecap="round"/>';
+    h += '<path d="M9 9L14 14M14 9L9 14" stroke="var(--red)" stroke-width="2" stroke-linecap="round"/>';
+    h += '<circle cx="75" cy="15" r="9" stroke="var(--blue)" stroke-width="3.5" fill="none"/>';
+    h += '<circle cx="18" cy="78" r="2.6" stroke="var(--blue)" stroke-width="1.8" fill="none"/>';
+    svg.innerHTML = h;
+  })();
 
   function render(popMove) {
     const s = state;
-    const moves = new Set(legal(s));
-    document.body.classList.toggle("turn-2", s.turn === 2 && !s.winner);
-    document.body.classList.toggle("turn-1", s.turn === 1 || !!s.winner);
+    const moves = new Set(G.legal(s));
     const locked = thinking || isComputerTurn();
+    const colorTurn = s.winner === 1 || s.winner === 2 ? s.winner : s.turn;
+    document.body.classList.toggle("turn-2", colorTurn === 2);
 
-    for (let m = 0; m < 81; m++) {
-      const el = cells[m], v = s.cells[m];
-      const want = v === 1 ? "p1" : v === 2 ? "p2" : "";
-      if (el.dataset.v !== String(v)) {
-        el.innerHTML = v === 1 ? X_SVG : v === 2 ? O_SVG : "";
-        el.dataset.v = v;
-        if (m === popMove && el.firstChild) el.firstChild.classList.add("pop");
-      }
-      el.className = "cell" + (want ? " " + want : "") + (m === s.last ? " last" : "");
-      el.disabled = !moves.has(m) || locked;
-      const b = (m / 9) | 0, c = m % 9;
-      el.setAttribute("aria-label", POS[c] + " cell of " + POS[b] + " board" + (v ? ", " + NAME[v] : ""));
-    }
-    const restricted = s.next >= 0 && !s.winner;
-    big.classList.toggle("restricted", restricted);
-    for (let b = 0; b < 9; b++) {
-      const st = s.boards[b], sb = smalls[b];
-      sb.className = "small" +
-        (st ? " done" : "") +
-        (st === 1 ? " won-1" : st === 2 ? " won-2" : st === 3 ? " drawn" : "") +
-        (!s.winner && !st && (s.next === b || s.next < 0) ? " active" : "") +
-        (s.line && s.line.includes(b) ? " winline" : "");
-      const mk = sb.lastChild;
-      const html = st === 1 ? BIG_X : st === 2 ? BIG_O : "";
-      if (mk.dataset.v !== String(st)) { mk.innerHTML = html; mk.dataset.v = st; if (html) mk.firstChild.classList.add("pop"); }
-    }
+    G.render(board, s, moves, locked, popMove);
 
-    // Status line
-    const chip = document.getElementById("chip");
-    const main = document.getElementById("statusMain");
-    const sub = document.getElementById("statusSub");
-    const statusEl = document.getElementById("status");
-    statusEl.classList.toggle("thinking", thinking);
+    const chip = $("chip"), main = $("statusMain"), sub = $("statusSub");
+    $("status").classList.toggle("thinking", thinking);
     if (s.winner === 3) {
       chip.style.background = "var(--muted)"; chip.innerHTML = "";
-      main.textContent = "It's a draw."; sub.textContent = "No one can line up three boards.";
+      main.textContent = "It's a draw."; sub.textContent = G.drawText;
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
-      document.body.classList.toggle("turn-2", s.winner === 2);
-      const you = settings.mode === "ai" ? (s.winner === settings.side ? " You win!" : " The computer wins.") : "";
-      main.textContent = NAME[s.winner] + " wins."; sub.textContent = you.trim();
+      main.textContent = NAME[s.winner] + " wins.";
+      sub.textContent = settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "";
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
-      const who = settings.mode === "ai" ? (s.turn === settings.side ? "Your turn" : "Computer") : NAME[s.turn] + "'s turn";
-      main.innerHTML = thinking ? who + " is thinking<span class=\"dots\"></span>" : who;
-      if (settings.mode === "ai" && s.turn === settings.side) main.textContent = "Your turn (" + NAME[s.turn] + ")";
-      sub.textContent = thinking ? "" : restricted ? "Play in the " + POS[s.next] + " board." : (history.length ? "Play in any open board." : "Red goes first. Play anywhere.");
+      if (thinking) main.innerHTML = 'Computer is thinking<span class="dots"></span>';
+      else if (settings.opp === "ai") main.textContent = s.turn === settings.side ? "Your turn (" + NAME[s.turn] + ")" : "Computer";
+      else main.textContent = NAME[s.turn] + "'s turn";
+      sub.textContent = thinking ? "" : G.hint(s, history.length);
     }
 
-    // Score
-    if (s.winner && !counted) { score[s.winner]++; counted = true; save(); }
-    document.getElementById("sc1").textContent = score[1];
-    document.getElementById("sc2").textContent = score[2];
-    document.getElementById("sc3").textContent = score[3];
+    const sc = score[gameKey];
+    if (s.winner && !counted) { sc[s.winner]++; counted = true; save(); }
+    $("sc1").textContent = sc[1]; $("sc2").textContent = sc[2]; $("sc3").textContent = sc[3];
 
-    // Controls
-    for (const btn of document.querySelectorAll("[data-mode]")) btn.setAttribute("aria-pressed", btn.dataset.mode === settings.mode);
+    for (const btn of document.querySelectorAll("[data-opp]")) btn.setAttribute("aria-pressed", btn.dataset.opp === settings.opp);
     for (const btn of document.querySelectorAll("[data-diff]")) btn.setAttribute("aria-pressed", btn.dataset.diff === settings.diff);
     for (const btn of document.querySelectorAll("[data-side]")) btn.setAttribute("aria-pressed", String(settings.side) === btn.dataset.side);
-    document.getElementById("aiOpts").hidden = settings.mode !== "ai";
-    document.getElementById("undoBtn").disabled = thinking || !canUndo();
+    $("aiOpts").hidden = settings.opp !== "ai";
+    $("undoBtn").disabled = thinking || !canUndo();
   }
 
   function canUndo() {
     if (!history.length) return false;
-    if (settings.mode !== "ai") return true;
+    if (settings.opp !== "ai") return true;
     return history.some(h => h.turn === settings.side);
   }
 
   function play(m) {
-    history.push(clone(state));
-    apply(state, m);
+    history.push(G.clone(state));
+    G.apply(state, m);
     render(m);
     maybeComputer();
   }
@@ -512,34 +652,53 @@ h1 .b { color: var(--blue); }
     const id = gameId;
     setTimeout(() => {
       if (id !== gameId) return;
-      const m = aiMove(state, settings.diff);
+      const m = G.ai(state, settings.diff);
       if (id !== gameId) return;
       thinking = false;
       play(m);
-    }, 280);
+    }, G.delay);
   }
 
   function newGame() {
     gameId++;
-    thinking = false;
-    counted = false;
-    state = newState();
+    thinking = false; counted = false;
+    state = G.newState();
     history = [];
     render();
     maybeComputer();
   }
 
-  big.addEventListener("click", e => {
+  function startGame(key) {
+    gameKey = key; G = GAMES[key];
+    board.innerHTML = "";
+    G.build(board);
+    $("gameTitle").textContent = G.title;
+    $("rulesList").innerHTML = G.rules.map(r => "<li>" + r + "</li>").join("");
+    $("menu").hidden = true; $("play").hidden = false;
+    window.scrollTo(0, 0);
+    newGame();
+  }
+
+  function showMenu() {
+    gameId++; thinking = false;
+    $("play").hidden = true; $("menu").hidden = false;
+    document.body.classList.remove("turn-2");
+    window.scrollTo(0, 0);
+  }
+
+  // ---------- Events ----------
+  for (const btn of document.querySelectorAll("[data-game]")) btn.addEventListener("click", () => startGame(btn.dataset.game));
+  $("menuBtn").addEventListener("click", showMenu);
+  board.addEventListener("click", e => {
     const btn = e.target.closest(".cell");
     if (!btn || btn.disabled) return;
     play(+btn.dataset.m);
   });
-
-  document.getElementById("newBtn").addEventListener("click", newGame);
-  document.getElementById("undoBtn").addEventListener("click", () => {
+  $("newBtn").addEventListener("click", newGame);
+  $("undoBtn").addEventListener("click", () => {
     if (thinking || !canUndo()) return;
-    if (state.winner && counted) { score[state.winner] = Math.max(0, score[state.winner] - 1); counted = false; save(); }
-    if (settings.mode === "ai") {
+    if (state.winner && counted) { const sc = score[gameKey]; sc[state.winner] = Math.max(0, sc[state.winner] - 1); counted = false; save(); }
+    if (settings.opp === "ai") {
       let prev;
       do { prev = history.pop(); } while (history.length && prev.turn !== settings.side);
       state = prev;
@@ -548,9 +707,9 @@ h1 .b { color: var(--blue); }
     }
     render();
   });
-  for (const btn of document.querySelectorAll("[data-mode]")) btn.addEventListener("click", () => {
-    if (settings.mode === btn.dataset.mode) return;
-    settings.mode = btn.dataset.mode; save(); newGame();
+  for (const btn of document.querySelectorAll("[data-opp]")) btn.addEventListener("click", () => {
+    if (settings.opp === btn.dataset.opp) return;
+    settings.opp = btn.dataset.opp; save(); newGame();
   });
   for (const btn of document.querySelectorAll("[data-diff]")) btn.addEventListener("click", () => {
     settings.diff = btn.dataset.diff; save(); render();
@@ -560,10 +719,7 @@ h1 .b { color: var(--blue); }
     if (settings.side === side) return;
     settings.side = side; save(); newGame();
   });
-
-  newGame();
 })();
 </script>
-
 </body>
 </html>
