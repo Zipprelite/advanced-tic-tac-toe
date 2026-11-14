@@ -227,6 +227,24 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
 .rules { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
 .rules-btn { width: 100%; }
+
+/* Username, online switch, queue */
+.text-in {
+  font: 600 17px var(--font-body); color: var(--ink); background: var(--cell);
+  border: 2px solid transparent; border-radius: 10px; padding: 12px 14px; width: 100%;
+}
+.text-in:focus { outline: none; border-color: var(--blue); }
+.menu-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin: -8px 0 22px; }
+.seg.where { min-width: min(100%, 300px); }
+.who { margin: 0; color: var(--muted); font-size: 14px; }
+.who b { color: var(--ink); }
+.linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--blue); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
+.queue-card { align-items: center; text-align: center; }
+.spinner { width: 46px; height: 46px; border-radius: 50%; border: 5px solid var(--cell); border-top-color: var(--red); border-right-color: var(--blue); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.vs { margin: -6px 0 12px; text-align: center; color: var(--muted); font-weight: 600; }
+.vs .r, .vs .b { font-weight: 700; }
 .rules-list { margin: 0; padding-left: 22px; display: grid; gap: 14px; color: var(--muted); font-size: 16px; }
 .rules-list b { color: var(--ink); font-weight: 600; }
 .rules-soon { margin: 0; color: var(--muted); font-size: 16px; }
@@ -245,10 +263,34 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 <body>
 <div class="wrap">
 
+  <!-- ===== Username (first visit) ===== -->
+  <section class="setup" id="nameScreen" hidden>
+    <button type="button" class="btn back" id="nameBack" hidden>← Menu</button>
+    <div>
+      <h1>Welcome to Advanced <span class="r">Tic</span>-<span class="b">Tac</span>-Toe</h1>
+      <p class="lede">Pick a username. Other players see it when you play online.</p>
+    </div>
+    <form class="setup-card" id="nameForm" novalidate>
+      <div class="group">
+        <label class="label" for="nameInput">Username</label>
+        <input type="text" class="text-in" id="nameInput" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Up to 16 characters">
+        <p class="note" id="nameErr"></p>
+      </div>
+      <button type="submit" class="btn primary start" id="nameSave">Continue</button>
+    </form>
+  </section>
+
   <!-- ===== Start menu ===== -->
   <section class="menu" id="menu">
     <h1>Advanced <span class="r">Tic</span>-<span class="b">Tac</span>-Toe</h1>
-    <p class="lede">Red against Blue. Pick a game, then play a friend on this screen or take on the computer.</p>
+    <p class="lede" id="menuLede">Red against Blue. Pick a game, then play a friend on this screen or take on the computer.</p>
+    <div class="menu-bar">
+      <div class="seg where" role="group" aria-label="Where to play">
+        <button type="button" id="where-local" data-where="local">This device</button>
+        <button type="button" id="where-online" data-where="online">Online</button>
+      </div>
+      <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button></p>
+    </div>
     <div class="modes">
       <div class="mode-col">
       <button type="button" class="mode" id="pick-normal" data-game="normal">
@@ -349,6 +391,23 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     </div>
   </section>
 
+  <!-- ===== Online queue ===== -->
+  <section class="setup" id="queueScreen" hidden>
+    <div>
+      <span class="label">Online</span>
+      <h1 id="queueTitle">Queuing for Normal Tic-Tac-Toe</h1>
+      <p class="lede" id="queueText">Waiting for another player…</p>
+    </div>
+    <div class="setup-card queue-card">
+      <div class="spinner" id="queueSpin" aria-hidden="true"></div>
+      <p class="note">The game starts as soon as someone else queues for the same game. To play a friend, send them this page and have them choose Online, then the same game.</p>
+      <div class="endbtns">
+        <button type="button" class="btn primary" id="queueRetry" hidden>Try again</button>
+        <button type="button" class="btn" id="queueCancel">Cancel</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== Game screen ===== -->
   <section id="play" hidden>
     <div class="topbar">
@@ -361,6 +420,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         <button type="button" class="btn back" id="undoBtn">Undo</button>
       </div>
     </div>
+    <p class="vs" id="vsLine" hidden></p>
 
     <div class="app">
       <main>
@@ -372,7 +432,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         <div class="endov" id="endOv" hidden>
           <div class="endcard" role="dialog" aria-labelledby="endTitle">
             <h2 id="endTitle">Red wins.</h2>
-            <p>New game?</p>
+            <p id="endText">New game?</p>
             <div class="endbtns">
               <button type="button" class="btn primary" id="endNew">New game</button>
               <button type="button" class="btn" id="endMenu">Menu</button>
@@ -384,6 +444,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   </section>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <script>
 (() => {
   const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -646,7 +707,11 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   let G = Ultimate;
   let state = G.newState();
   let history = [];
-  let settings = { opp: "ai", diff: "medium", side: 1 };
+  let settings = { opp: "ai", diff: "medium", side: 1, where: "local" };
+  let online = null;   // the current online match: { conn, side, oppName, myReq, theirReq, left }
+  let net = null;      // matchmaking state while queuing
+  let username = "";
+  try { username = localStorage.getItem("att-name") || ""; } catch (e) {}
   let score = { normal: { 1: 0, 2: 0, 3: 0 }, ultimate: { 1: 0, 2: 0, 3: 0 } };
   let thinking = false, gameId = 0, counted = false;
 
@@ -666,7 +731,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   const $ = id => document.getElementById(id);
   const board = $("board");
   const endOv = $("endOv");
-  const isComputerTurn = () => settings.opp === "ai" && !state.winner && state.turn !== settings.side;
+  const isComputerTurn = () => !online && settings.opp === "ai" && !state.winner && state.turn !== settings.side;
 
   // Small Ultimate illustration on the menu card.
   (function drawUltArt() {
@@ -686,7 +751,8 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   function render(popMove) {
     const s = state;
     const moves = new Set(G.legal(s));
-    const locked = thinking || isComputerTurn();
+    const leftMid = !!online && online.left && !s.winner;
+    const locked = thinking || isComputerTurn() || (!!online && (s.turn !== online.side || online.left));
     const colorTurn = s.winner === 1 || s.winner === 2 ? s.winner : s.turn;
     document.body.classList.toggle("turn-2", colorTurn === 2);
 
@@ -695,15 +761,23 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
     // End-of-game message over a faded board.
     const justEnded = !!s.winner && popMove !== undefined;
-    board.classList.toggle("ended", !!s.winner);
+    board.classList.toggle("ended", !!s.winner || leftMid);
     board.classList.toggle("ended-anim", justEnded);
     endOv.classList.toggle("anim", justEnded);
-    endOv.hidden = !s.winner;
-    if (s.winner) {
+    endOv.hidden = !s.winner && !leftMid;
+    if (s.winner || leftMid) {
       const card = endOv.firstElementChild;
-      card.className = "endcard" + (s.winner === 3 ? "" : " w" + s.winner);
-      $("endTitle").textContent = s.winner === 3 ? "It's a draw." : NAME[s.winner] + " wins.";
-      if (justEnded) $("endNew").focus({ preventScroll: true });
+      const endNew = $("endNew"), endText = $("endText");
+      card.className = "endcard" + (s.winner === 1 || s.winner === 2 ? " w" + s.winner : "");
+      $("endTitle").textContent = leftMid ? online.oppName + " left." : s.winner === 3 ? "It's a draw." : NAME[s.winner] + " wins.";
+      endNew.hidden = false; endNew.disabled = false; endNew.textContent = "New game";
+      endText.textContent = "New game?";
+      if (online) {
+        if (online.left) { endText.textContent = leftMid ? "The game has ended." : online.oppName + " left the game."; endNew.hidden = true; }
+        else if (online.myReq) { endText.textContent = "Waiting for " + online.oppName + " to accept…"; endNew.disabled = true; }
+        else if (online.theirReq) { endText.textContent = online.oppName + " wants a rematch."; endNew.textContent = "Accept"; }
+      }
+      if (justEnded) (endNew.hidden ? $("endMenu") : endNew).focus({ preventScroll: true });
     }
 
     const chip = $("chip"), main = $("statusMain"), sub = $("statusSub");
@@ -714,17 +788,29 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
       main.textContent = NAME[s.winner] + " wins.";
-      sub.textContent = settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "";
+      sub.textContent = online ? (s.winner === online.side ? "You win!" : online.oppName + " wins.")
+        : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "";
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
-      if (thinking) main.innerHTML = 'Computer is thinking<span class="dots"></span>';
+      if (online) main.textContent = s.turn === online.side ? "Your turn (" + NAME[s.turn] + ")" : online.oppName + "'s turn";
+      else if (thinking) main.innerHTML = 'Computer is thinking<span class="dots"></span>';
       else if (settings.opp === "ai") main.textContent = s.turn === settings.side ? "Your turn (" + NAME[s.turn] + ")" : "Computer";
       else main.textContent = NAME[s.turn] + "'s turn";
       sub.textContent = thinking ? "" : G.hint(s, history.length);
     }
 
     $("undoBtn").disabled = thinking || !canUndo();
-    $("restartBtn").hidden = settings.opp !== "2p";
+    $("undoBtn").hidden = !!online;
+    $("restartBtn").hidden = !!online || settings.opp !== "2p";
+    const vs = $("vsLine");
+    vs.hidden = !online;
+    if (online) {
+      vs.innerHTML = "";
+      const me = document.createElement("span"), them = document.createElement("span");
+      me.className = online.side === 1 ? "r" : "b"; me.textContent = "You (" + NAME[online.side] + ")";
+      them.className = online.side === 1 ? "b" : "r"; them.textContent = online.oppName + " (" + NAME[3 - online.side] + ")";
+      vs.append(me, " vs ", them);
+    }
   }
 
   // Draws a line in the winner's colour through the three winning cells (Normal)
@@ -779,7 +865,8 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     return history.some(h => h.turn === settings.side);
   }
 
-  function play(m) {
+  function play(m, fromOpponent) {
+    if (online && !fromOpponent) send({ t: "move", m });
     history.push(G.clone(state));
     G.apply(state, m);
     render(m);
@@ -811,7 +898,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   function showScreen(id) {
     gameId++; thinking = false;
-    for (const s of ["menu", "rulesScreen", "setup", "play"]) $(s).hidden = s !== id;
+    for (const s of ["nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -862,14 +949,231 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     newGame();
   }
 
-  function showMenu() { showScreen("menu"); }
+  function showMenu() { leaveOnline(); renderMenu(); showScreen("menu"); }
+
+  // ================= Username =================
+  const cleanName = n => String(n || "").replace(/\s+/g, " ").trim().slice(0, 16);
+  function openName() {
+    $("nameInput").value = username;
+    $("nameErr").textContent = "";
+    $("nameBack").hidden = !username;
+    showScreen("nameScreen");
+    $("nameInput").focus({ preventScroll: true });
+  }
+  $("nameForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const n = cleanName($("nameInput").value);
+    if (!n) { $("nameErr").textContent = "Type a username to continue."; $("nameInput").focus(); return; }
+    username = n;
+    try { localStorage.setItem("att-name", n); } catch (err) {}
+    showMenu();
+  });
+  $("nameBack").addEventListener("click", showMenu);
+  $("changeName").addEventListener("click", openName);
+
+  // ================= Menu: this device or online =================
+  function renderMenu() {
+    $("whoName").textContent = username || "Player";
+    for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
+    $("menuLede").textContent = settings.where === "online"
+      ? "Red against Blue, online. Pick a game to join the queue. It starts when another player joins."
+      : "Red against Blue. Pick a game, then play a friend on this screen or take on the computer.";
+  }
+  for (const btn of document.querySelectorAll("[data-where]")) btn.addEventListener("click", () => {
+    settings.where = btn.dataset.where; save(); renderMenu();
+  });
+  const pickGame = key => settings.where === "online" ? startQueue(key) : openSetup(key);
+
+  // ================= Online play =================
+  // Matchmaking uses the free PeerJS service. For each game there is one shared
+  // "waiting spot" ID. The first player to queue takes it and waits. The next
+  // player finds it taken, connects to the waiting player, and the game starts.
+  // The waiting player then frees the spot for the next pair. Moves go directly
+  // between the two browsers.
+  const PEER_OPTS = { debug: 0 };
+  const lobbyId = key => "zipprelite-advttt-v1-" + key + "-lobby";
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  function later(n, fn, ms) {
+    n.timers.push(setTimeout(() => { if (!n.dead) fn(); }, ms));
+  }
+  function send(msg) {
+    if (!online || !online.conn) return;
+    try { online.conn.send(msg); } catch (e) {}
+  }
+  function leaveOnline() {
+    if (online) send({ t: "bye" });
+    if (net) {
+      const n = net;
+      n.dead = true;
+      n.timers.forEach(clearTimeout);
+      try { if (n.lobby) n.lobby.destroy(); } catch (e) {}
+      setTimeout(() => { try { if (n.me) n.me.destroy(); } catch (e) {} }, 300);
+    }
+    net = null; online = null;
+  }
+  window.addEventListener("pagehide", leaveOnline);
+
+  function queueStatus(text, failed) {
+    $("queueText").textContent = text;
+    $("queueSpin").hidden = !!failed;
+    $("queueRetry").hidden = !failed;
+  }
+
+  function startQueue(key) {
+    leaveOnline();
+    gameKey = key; G = GAMES[key];
+    $("queueTitle").textContent = "Queuing for " + G.title + " Tic-Tac-Toe";
+    showScreen("queueScreen");
+    if (typeof Peer === "undefined") {
+      queueStatus("Online play couldn't load. Check your internet connection, then try again.", true);
+      return;
+    }
+    queueStatus("Connecting…");
+    const n = net = { key, dead: false, timers: [], me: null, lobby: null, matched: false, attempt: 0 };
+    n.me = new Peer(undefined, PEER_OPTS);
+    n.me.on("open", () => { if (!n.dead) { queueStatus("Waiting for another player…"); tryHost(n); } });
+    n.me.on("connection", conn => hostIncoming(n, conn));
+    n.me.on("disconnected", () => { if (!n.dead && !n.matched) { try { n.me.reconnect(); } catch (e) {} } });
+    n.me.on("error", err => {
+      if (n.dead) return;
+      if (err.type === "peer-unavailable") {
+        // The player we tried to reach has gone. Go back to queuing.
+        if (!n.matched) { n.attempt++; later(n, () => tryHost(n), rand(400, 1200)); }
+      } else if (!n.matched && ["network", "server-error", "socket-error", "socket-closed", "browser-incompatible", "ssl-unavailable"].includes(err.type)) {
+        queueStatus("Couldn't reach the matchmaking server. Check your internet connection, then try again.", true);
+        n.dead = true;
+      }
+    });
+  }
+
+  // Try to take the waiting spot for this game.
+  function tryHost(n) {
+    if (n.dead || n.matched || n.lobby) return;
+    const lobby = new Peer(lobbyId(n.key), PEER_OPTS);
+    n.lobby = lobby;
+    lobby.on("connection", c => {
+      c.on("open", () => {
+        // Tell the other player how to reach us directly.
+        c.send(n.matched || n.dead ? { t: "busy" } : { t: "hello", id: n.me.id });
+        setTimeout(() => { try { c.close(); } catch (e) {} }, 1500);
+      });
+    });
+    lobby.on("error", err => {
+      if (n.dead) return;
+      try { lobby.destroy(); } catch (e) {}
+      if (n.lobby === lobby) n.lobby = null;
+      if (err.type === "unavailable-id") tryJoin(n);          // someone is already waiting
+      else later(n, () => tryHost(n), rand(1500, 2500));
+    });
+  }
+
+  // Someone is waiting: ask them for their direct address.
+  function tryJoin(n) {
+    if (n.dead || n.matched) return;
+    const a = ++n.attempt;
+    const c = n.me.connect(lobbyId(n.key), { reliable: true });
+    c.on("data", d => {
+      if (a !== n.attempt) return;
+      try { c.close(); } catch (e) {}
+      if (d && d.t === "hello" && typeof d.id === "string") joinHost(n, d.id);
+      else { n.attempt++; later(n, () => tryHost(n), rand(800, 2000)); }
+    });
+    later(n, () => {
+      if (a !== n.attempt) return;
+      n.attempt++;
+      try { c.close(); } catch (e) {}
+      tryHost(n);
+    }, 6000);
+  }
+
+  // Connect directly to the waiting player.
+  function joinHost(n, hostId) {
+    const a = ++n.attempt;
+    const conn = n.me.connect(hostId, { reliable: true });
+    conn.on("open", () => { if (a === n.attempt) conn.send({ t: "join", name: username }); });
+    conn.on("data", d => {
+      if (!d || typeof d !== "object") return;
+      if (d.t === "start" && !n.matched && a === n.attempt) {
+        n.matched = true; n.attempt++;
+        beginMatch(conn, d.side === 1 ? 1 : 2, cleanName(d.name) || "Player");
+      } else if (d.t === "busy" && a === n.attempt) {
+        n.attempt++;
+        try { conn.close(); } catch (e) {}
+        later(n, () => tryHost(n), rand(800, 2000));
+      } else if (online && online.conn === conn) onGameData(d);
+    });
+    later(n, () => {
+      if (a !== n.attempt) return;
+      n.attempt++;
+      try { conn.close(); } catch (e) {}
+      tryHost(n);
+    }, 8000);
+  }
+
+  // We're waiting and another player connected directly.
+  function hostIncoming(n, conn) {
+    conn.on("data", d => {
+      if (!d || typeof d !== "object") return;
+      if (d.t === "join") {
+        if (n.matched || n.dead) { conn.send({ t: "busy" }); setTimeout(() => { try { conn.close(); } catch (e) {} }, 300); return; }
+        n.matched = true; n.attempt++;
+        try { if (n.lobby) n.lobby.destroy(); } catch (e) {}   // free the waiting spot
+        n.lobby = null;
+        const mySide = Math.random() < 0.5 ? 1 : 2;
+        conn.send({ t: "start", side: 3 - mySide, name: username });
+        beginMatch(conn, mySide, cleanName(d.name) || "Player");
+      } else if (online && online.conn === conn) onGameData(d);
+    });
+  }
+
+  function beginMatch(conn, side, oppName) {
+    online = { conn, side, oppName, myReq: false, theirReq: false, left: false };
+    const gone = () => { if (online && online.conn === conn && !online.left) { online.left = true; render(); } };
+    conn.on("close", gone);
+    conn.on("error", gone);
+    startGame();
+  }
+
+  function onGameData(d) {
+    if (!online) return;
+    if (d.t === "move") {
+      const m = d.m | 0;
+      if (state.winner || state.turn === online.side) return;
+      if (!G.legal(state).includes(m)) return;
+      play(m, true);
+    } else if (d.t === "rematch") {
+      online.theirReq = true;
+      checkRematch();
+    } else if (d.t === "bye") {
+      online.left = true;
+      render();
+    }
+  }
+
+  function requestRematch() {
+    if (!online || online.left || online.myReq) return;
+    online.myReq = true;
+    send({ t: "rematch" });
+    checkRematch();
+  }
+  function checkRematch() {
+    if (online.myReq && online.theirReq) {
+      online.myReq = online.theirReq = false;
+      online.side = 3 - online.side;   // swap colours each game
+      newGame();
+    } else render();
+  }
+
+  $("queueCancel").addEventListener("click", showMenu);
+  $("queueRetry").addEventListener("click", () => startQueue(gameKey));
 
   // ---------- Events ----------
-  for (const btn of document.querySelectorAll("[data-game]")) btn.addEventListener("click", () => openSetup(btn.dataset.game));
+  for (const btn of document.querySelectorAll("[data-game]")) btn.addEventListener("click", () => pickGame(btn.dataset.game));
   $("menuBtn").addEventListener("click", showMenu);
   $("setupBack").addEventListener("click", showMenu);
   $("startBtn").addEventListener("click", startGame);
-  $("endNew").addEventListener("click", newGame);
+  $("endNew").addEventListener("click", () => online ? requestRematch() : newGame());
   $("restartBtn").addEventListener("click", newGame);
   // Rules screen, opened from the Rules button under each game on the menu.
   let rulesKey = "normal";
@@ -887,7 +1191,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   }
   for (const btn of document.querySelectorAll("[data-rules]")) btn.addEventListener("click", () => openRules(btn.dataset.rules));
   $("rulesBack").addEventListener("click", showMenu);
-  $("rulesPlay").addEventListener("click", () => openSetup(rulesKey));
+  $("rulesPlay").addEventListener("click", () => pickGame(rulesKey));
   $("endMenu").addEventListener("click", showMenu);
   board.addEventListener("click", e => {
     const btn = e.target.closest(".cell");
@@ -895,7 +1199,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     play(+btn.dataset.m);
   });
   $("undoBtn").addEventListener("click", () => {
-    if (thinking || !canUndo()) return;
+    if (online || thinking || !canUndo()) return;
 
     if (settings.opp === "ai") {
       let prev;
@@ -915,6 +1219,10 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   for (const btn of document.querySelectorAll("[data-side]")) btn.addEventListener("click", () => {
     settings.side = +btn.dataset.side; save(); renderSetup();
   });
+
+  // ---------- Start ----------
+  renderMenu();
+  if (!username) openName();
 })();
 </script>
 </body>
