@@ -161,6 +161,14 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .small.won-2 .mark { color: var(--blue); }
 .mark svg { width: 100%; height: 100%; overflow: visible; }
 
+/* Winning line drawn over the board */
+#board { position: relative; }
+.winsvg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 2; }
+.winsvg line { stroke-linecap: round; fill: none; }
+.winsvg .halo { stroke: var(--surface); }
+.winsvg.anim line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: drawline 0.5s cubic-bezier(.4,0,.2,1) 0.12s forwards; }
+@keyframes drawline { to { stroke-dashoffset: 0; } }
+
 .pop { animation: pop 0.18s ease-out; }
 @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
@@ -190,6 +198,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .pop, .thinking .dots::after { animation: none; }
+  .winsvg.anim line { animation: none; stroke-dashoffset: 0; }
   * { transition: none !important; }
 }
 </style>
@@ -603,6 +612,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     document.body.classList.toggle("turn-2", colorTurn === 2);
 
     G.render(board, s, moves, locked, popMove);
+    drawWinLine(popMove !== undefined);
 
     const chip = $("chip"), main = $("statusMain"), sub = $("statusSub");
     $("status").classList.toggle("thinking", thinking);
@@ -631,6 +641,52 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     $("aiOpts").hidden = settings.opp !== "ai";
     $("undoBtn").disabled = thinking || !canUndo();
   }
+
+  // Draws a line in the winner's colour through the three winning cells (Normal)
+  // or the three winning small boards (Ultimate).
+  function drawWinLine(animate) {
+    const old = board.querySelector(".winsvg");
+    if (old) old.remove();
+    const s = state;
+    if (!(s.winner === 1 || s.winner === 2) || !s.line) return;
+    const els = G === Normal ? Normal.cellEls : Ultimate.smallEls;
+    const br = board.getBoundingClientRect();
+    if (!br.width) return;
+    const a = els[s.line[0]].getBoundingClientRect();
+    const b = els[s.line[2]].getBoundingClientRect();
+    let x1 = a.left + a.width / 2 - br.left, y1 = a.top + a.height / 2 - br.top;
+    let x2 = b.left + b.width / 2 - br.left, y2 = b.top + b.height / 2 - br.top;
+    // Run the line a little past the centres of the end cells.
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+    const ext = a.width * 0.32;
+    x1 -= dx / len * ext; y1 -= dy / len * ext;
+    x2 += dx / len * ext; y2 += dy / len * ext;
+    const w = Math.max(6, a.width * (G === Normal ? 0.1 : 0.07));
+    const color = s.winner === 1 ? "var(--red)" : "var(--blue)";
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "winsvg" + (animate ? " anim" : ""));
+    svg.setAttribute("width", br.width);
+    svg.setAttribute("height", br.height);
+    svg.setAttribute("viewBox", `0 0 ${br.width} ${br.height}`);
+    svg.setAttribute("aria-hidden", "true");
+    for (const [cls, sw, stroke] of [["halo", w + 6, null], ["stroke", w, color]]) {
+      const ln = document.createElementNS(ns, "line");
+      ln.setAttribute("x1", x1); ln.setAttribute("y1", y1);
+      ln.setAttribute("x2", x2); ln.setAttribute("y2", y2);
+      ln.setAttribute("pathLength", "1");
+      ln.setAttribute("stroke-width", sw);
+      ln.setAttribute("class", cls);
+      if (stroke) ln.style.stroke = stroke;
+      svg.appendChild(ln);
+    }
+    board.appendChild(svg);
+  }
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (!$("play").hidden) drawWinLine(false); }, 100);
+  });
 
   function canUndo() {
     if (!history.length) return false;
