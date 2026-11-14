@@ -190,6 +190,23 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .supreme.notrans { transition: none; }
 .supreme.overview .cell { pointer-events: none; }
 .supreme.overview .ugame.pickable { cursor: pointer; }
+/* 3D Cube (experimental) */
+.cube3d { position: relative; width: 100%; max-width: 560px; aspect-ratio: 1; margin: 0 auto; background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); }
+.cube-stage { position: absolute; inset: 0; }
+.cube-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: 20px; }
+.cube-floor { position: absolute; inset: 0; padding: clamp(8px, 2vw, 14px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(6px, 1.8vw, 12px); }
+.cube-floor .cell { border-radius: 14px; }
+.cube-floor .cell:not(:disabled):hover { background: var(--turn-soft); }
+.cube-floor .cell.blocked { background: var(--draw-soft); }
+.cube-floor .cell.win.p1 { background: var(--red-soft); }
+.cube-floor .cell.win.p2 { background: var(--blue-soft); }
+.cube-msg { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; text-align: center; color: var(--muted); font-size: 13px; font-weight: 600; pointer-events: none; }
+.floorbar { max-width: 560px; margin: -4px auto 10px; }
+.labs { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 22px; font-size: 14px; }
+.labs-btn { appearance: none; display: inline-flex; align-items: center; gap: 8px; border: 1.5px dashed var(--line); background: transparent; color: var(--ink); font: 600 14px var(--font-body); padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+.labs-btn:hover { border-color: var(--muted); background: var(--surface); }
+.labs-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.labs-btn svg { width: 18px; height: 18px; }
 .zoombar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px; min-height: 40px; margin: -4px 0 8px; color: var(--muted); font-size: 14px; font-weight: 600; text-align: center; }
 .supreme {
   width: 100%; max-width: max(340px, min(940px, calc(100vh - 170px))); aspect-ratio: 1; margin: 0 auto;
@@ -373,6 +390,13 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       <button type="button" class="btn rules-btn" id="rules-supreme" data-rules="supreme">Rules</button>
       </div>
     </div>
+    <div class="labs">
+      <button type="button" class="labs-btn" id="pick-cube" data-game="cube">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5L21 7.5V16.5L12 21.5L3 16.5V7.5Z M3 7.5L12 12.5L21 7.5 M12 12.5V21.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        3D Cube <span class="soon">Experimental</span>
+      </button>
+      <button type="button" class="linkbtn" id="rules-cube" data-rules="cube">Rules</button>
+    </div>
   </section>
 
   <!-- ===== Rules screen ===== -->
@@ -468,6 +492,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
           <span id="zoomText"></span>
           <button type="button" class="btn back" id="zoomBtn">Show whole board</button>
         </div>
+        <div class="floorbar" id="floorBar" hidden></div>
         <div class="board-wrap" id="boardWrap">
           <div id="board" role="grid" aria-label="Game board"></div>
         </div>
@@ -864,6 +889,292 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     }
   };
 
+  // ================= 3D Cube (experimental) =================
+  // A 3x3x3 cube of 27 small cubes. Cell index = floor * 9 + row * 3 + column
+  // (floor 0 is the bottom). The center cube (13) is blocked. Play until every
+  // cube is claimed; whoever made more lines of three, in any direction, wins.
+  const CUBE_CENTER = 13;
+  const CUBE_LINES = (() => {
+    const L = [], at = (x, y, z) => z * 9 + y * 3 + x, ok = v => v >= 0 && v <= 2;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const first = dx || dy || dz;
+      if (first <= 0) continue;   // one direction from each opposite pair
+      for (let z = 0; z < 3; z++) for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
+        if (ok(x - dx) && ok(y - dy) && ok(z - dz)) continue;   // not the start of a line
+        if (!(ok(x + 2 * dx) && ok(y + 2 * dy) && ok(z + 2 * dz))) continue;
+        L.push([at(x, y, z), at(x + dx, y + dy, z + dz), at(x + 2 * dx, y + 2 * dy, z + 2 * dz)]);
+      }
+    }
+    return L;
+  })();
+  const CUBE_LINES_AT = Array.from({ length: 27 }, (_, m) => CUBE_LINES.map((l, i) => l.includes(m) ? i : -1).filter(i => i >= 0));
+  const FLOOR_NAME = ["bottom", "middle", "top"];
+  const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+
+  let threeLoading = null;
+  function loadThree() {
+    if (window.THREE) return Promise.resolve();
+    if (!threeLoading) threeLoading = new Promise((res, rej) => {
+      const sc = document.createElement("script");
+      sc.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+      sc.onload = res; sc.onerror = () => { threeLoading = null; rej(); };
+      document.head.appendChild(sc);
+    });
+    return threeLoading;
+  }
+
+  const Cube = {
+    title: "3D Cube",
+    rules: [
+      "<b>The board is a cube</b> of 27 small cubes, three floors of 3×3. The center cube is blocked.",
+      "<b>Take turns claiming cubes.</b> Red goes first. Drag to spin the cube, or use the floor buttons to see one floor flat.",
+      "<b>Make lines of three</b> in any direction: across a floor, straight up and down, diagonally through the floors, or corner to corner.",
+      "<b>Keep going until every cube is claimed.</b> Whoever made more lines wins. Same number of lines is a draw."
+    ],
+    newState() {
+      const cells = new Uint8Array(27);
+      cells[CUBE_CENTER] = 3;
+      return { cells, turn: 1, winner: 0, last: -1, line: null, lines: [], score: [0, 0, 0] };
+    },
+    clone: s => ({ cells: s.cells.slice(), turn: s.turn, winner: s.winner, last: s.last, line: null, lines: s.lines.slice(), score: s.score.slice() }),
+    legal(s) {
+      const out = [];
+      if (s.winner) return out;
+      for (let i = 0; i < 27; i++) if (!s.cells[i]) out.push(i);
+      return out;
+    },
+    apply(s, m) {
+      const p = s.turn;
+      s.cells[m] = p;
+      for (const li of CUBE_LINES_AT[m]) {
+        const l = CUBE_LINES[li];
+        if (s.cells[l[0]] === p && s.cells[l[1]] === p && s.cells[l[2]] === p) { s.lines.push([li, p]); s.score[p]++; }
+      }
+      let empty = false;
+      for (let i = 0; i < 27; i++) if (!s.cells[i]) { empty = true; break; }
+      if (!empty) s.winner = s.score[1] > s.score[2] ? 1 : s.score[2] > s.score[1] ? 2 : 3;
+      s.turn = 3 - p;
+      s.last = m;
+    },
+    ai(s, diff) {
+      if (diff === "easy") {
+        const moves = Cube.legal(s);
+        if (Math.random() < 0.5) {
+          const good = moves.filter(m => CUBE_LINES_AT[m].some(li => CUBE_LINES[li].every(c => c === m || s.cells[c] === s.turn)));
+          if (good.length) return rnd(good);
+        }
+        return rnd(moves);
+      }
+      return mcts(Cube, s, diff === "medium" ? 300 : 1500);
+    },
+    hint(s, n) {
+      if (!n) return "Red goes first. Claim any cube. Most lines wins.";
+      return "Lines so far: Red " + s.score[1] + ", Blue " + s.score[2] + ".";
+    },
+    scoreText: s => "Final count: Red " + plural(s.score[1], "line") + ", Blue " + plural(s.score[2], "line") + ".",
+    drawText: "Both players made the same number of lines.",
+    delay: 300,
+
+    build(root) {
+      root.className = "cube3d";
+      this.view = -1;          // -1 = 3D view, 0-2 = a single floor
+      this.s = null; this.moves = new Set(); this.locked = true; this.hover = -1;
+      this.three = null;
+      root.innerHTML =
+        '<div class="cube-stage"></div>' +
+        '<div class="cube-floor" hidden></div>' +
+        '<p class="cube-msg">Drag to spin. Tap a cube to claim it.</p>';
+      this.stage = root.querySelector(".cube-stage");
+      this.floorEl = root.querySelector(".cube-floor");
+      this.msg = root.querySelector(".cube-msg");
+      this.floorCells = [];
+      for (let c = 0; c < 9; c++) {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "cell";
+        this.floorEl.appendChild(b); this.floorCells.push(b);
+      }
+      const bar = $("floorBar");
+      bar.innerHTML =
+        '<div class="seg" role="group" aria-label="View">' +
+        '<button type="button" data-floor="-1">3D view</button>' +
+        '<button type="button" data-floor="2">Top</button>' +
+        '<button type="button" data-floor="1">Middle</button>' +
+        '<button type="button" data-floor="0">Bottom</button></div>';
+      bar.hidden = false;
+      for (const b of bar.querySelectorAll("[data-floor]")) b.addEventListener("click", () => { this.setView(+b.dataset.floor); });
+      this.setView(-1);
+      loadThree().then(() => { if (root.isConnected && G === Cube) this.init3d(); })
+        .catch(() => { this.msg.textContent = "The 3D view couldn't load. Use the floor buttons to play."; this.setView(2); });
+    },
+
+    setView(v) {
+      this.view = v;
+      this.stage.hidden = v >= 0;
+      this.floorEl.hidden = v < 0;
+      this.msg.hidden = v >= 0;
+      for (const b of $("floorBar").querySelectorAll("[data-floor]")) b.setAttribute("aria-pressed", +b.dataset.floor === v);
+      if (this.s) this.renderFloor();
+      if (v < 0 && this.three) { this.three.resize(); this.update3d(); }
+    },
+
+    render(root, s, moves, locked, popMove) {
+      this.s = s; this.moves = moves; this.locked = locked;
+      this.renderFloor(popMove);
+      if (this.three) this.update3d();
+    },
+
+    renderFloor(popMove) {
+      const s = this.s;
+      if (this.view < 0 || !s) return;
+      const inLine = new Set();
+      for (const [li] of s.lines) for (const c of CUBE_LINES[li]) inLine.add(c);
+      for (let c = 0; c < 9; c++) {
+        const m = this.view * 9 + c, el = this.floorCells[c], v = s.cells[m];
+        el.dataset.m = m;
+        drawCell(el, v === 3 ? 0 : v, m === popMove);
+        el.className = "cell" + (v === 1 || v === 2 ? " p" + v : "") + (v === 3 ? " blocked" : "") +
+          (m === s.last ? " last" : "") + (inLine.has(m) ? " win" : "");
+        el.disabled = !this.moves.has(m) || this.locked;
+        el.setAttribute("aria-label", FLOOR_NAME[this.view] + " floor, " + POS[c] + (v === 3 ? ", blocked" : v ? ", " + NAME[v] : ""));
+      }
+    },
+
+    init3d() {
+      const T = window.THREE, stage = this.stage;
+      const renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      stage.appendChild(renderer.domElement);
+      const scene = new T.Scene();
+      const camera = new T.PerspectiveCamera(38, 1, 0.1, 100);
+      camera.position.set(0, 0, 10);
+      scene.add(new T.AmbientLight(0xffffff, 0.75));
+      const sun = new T.DirectionalLight(0xffffff, 0.65);
+      sun.position.set(3, 6, 7); scene.add(sun);
+      const group = new T.Group();
+      group.rotation.set(0.5, -0.65, 0);
+      scene.add(group);
+      const box = new T.BoxGeometry(0.8, 0.8, 0.8), edges = new T.EdgesGeometry(box);
+      const meshes = [];
+      for (let i = 0; i < 27; i++) {
+        const x = i % 3, y = ((i / 3) | 0) % 3, z = (i / 9) | 0;
+        const mesh = new T.Mesh(box, new T.MeshStandardMaterial({ transparent: true, roughness: 0.55, metalness: 0.05 }));
+        mesh.position.set((x - 1) * 1.25, (z - 1) * 1.25, (y - 1) * 1.25);
+        mesh.userData.m = i;
+        const outline = new T.LineSegments(edges, new T.LineBasicMaterial({ transparent: true }));
+        mesh.add(outline); mesh.userData.outline = outline;
+        group.add(mesh); meshes.push(mesh);
+      }
+      const rods = new T.Group();
+      group.add(rods);
+
+      const draw = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; renderer.render(scene, camera); }); } };
+      let pending = false;
+      const resize = () => {
+        const w = stage.clientWidth;
+        if (!w) return;
+        renderer.setSize(w, w, false);
+        camera.aspect = 1; camera.updateProjectionMatrix();
+        draw();
+      };
+      new ResizeObserver(resize).observe(stage);
+
+      // Drag to spin, tap to claim.
+      const ray = new T.Raycaster(), ptr = new T.Vector2();
+      const pick = e => {
+        const r = renderer.domElement.getBoundingClientRect();
+        ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+        ray.setFromCamera(ptr, camera);
+        // Only empty, playable cubes can be picked, so taps reach cubes behind claimed ones too.
+        const targets = meshes.filter(mm => this.moves.has(mm.userData.m) && !this.locked);
+        const hit = ray.intersectObjects(targets, false)[0];
+        return hit ? hit.object.userData.m : -1;
+      };
+      let down = null;
+      const cv = renderer.domElement;
+      cv.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY, moved: false }; cv.setPointerCapture(e.pointerId); });
+      cv.addEventListener("pointermove", e => {
+        if (down) {
+          const dx = e.clientX - down.x, dy = e.clientY - down.y;
+          if (!down.moved && Math.hypot(dx, dy) > 6) down.moved = true;
+          if (down.moved) {
+            group.rotation.y += dx * 0.01;
+            group.rotation.x = Math.max(-1.4, Math.min(1.4, group.rotation.x + dy * 0.01));
+            down.x = e.clientX; down.y = e.clientY;
+            draw();
+          }
+        } else if (e.pointerType === "mouse") {
+          const m = pick(e);
+          if (m !== this.hover) { this.hover = m; this.update3d(); }
+          cv.style.cursor = m >= 0 ? "pointer" : "grab";
+        }
+      });
+      const end = e => {
+        if (!down) return;
+        const tap = !down.moved;
+        down = null;
+        if (tap && e.type === "pointerup") {
+          const m = pick(e);
+          if (m >= 0) { this.hover = -1; play(m); }
+        }
+      };
+      cv.addEventListener("pointerup", end);
+      cv.addEventListener("pointercancel", end);
+      cv.addEventListener("pointerleave", () => { if (this.hover >= 0) { this.hover = -1; this.update3d(); } });
+
+      this.three = { T, meshes, rods, group, draw, resize };
+      resize();
+      this.update3d();
+    },
+
+    update3d() {
+      const t = this.three, s = this.s;
+      if (!t || !s) return;
+      const css = getComputedStyle(document.documentElement);
+      const col = name => new t.T.Color(css.getPropertyValue(name).trim() || "#888");
+      const red = col("--red"), blue = col("--blue"), muted = col("--muted"), turn = s.turn === 1 ? red : blue;
+      const inLine = new Set();
+      for (const [li] of s.lines) for (const c of CUBE_LINES[li]) inLine.add(c);
+      for (let i = 0; i < 27; i++) {
+        const mesh = t.meshes[i], mat = mesh.material, out = mesh.userData.outline.material, v = s.cells[i];
+        mat.emissive.setRGB(0, 0, 0); mat.emissiveIntensity = 1;
+        if (v === 1 || v === 2) {
+          const c = v === 1 ? red : blue;
+          mat.color.copy(c); mat.opacity = 1; mat.depthWrite = true;
+          out.color.copy(c); out.opacity = 0.9;
+          if (inLine.has(i)) mat.emissive.copy(c).multiplyScalar(0.25);
+          if (i === s.last) mat.emissive.copy(c).multiplyScalar(0.45);
+          mesh.scale.setScalar(1);
+        } else if (v === 3) {
+          mat.color.copy(muted); mat.opacity = 0.55; mat.depthWrite = true;
+          out.color.copy(muted); out.opacity = 0.6;
+          mesh.scale.setScalar(0.5);
+        } else {
+          const hov = i === this.hover;
+          mat.color.copy(hov ? turn : muted); mat.opacity = hov ? 0.55 : 0.08; mat.depthWrite = false;
+          out.color.copy(hov ? turn : muted); out.opacity = hov ? 0.95 : 0.45;
+          mesh.scale.setScalar(hov ? 1.05 : 1);
+        }
+        mat.needsUpdate = true;
+      }
+      // A rod through each finished line, in the colour of the player who made it.
+      while (t.rods.children.length) {
+        const r = t.rods.children.pop();
+        r.geometry.dispose(); r.material.dispose();
+      }
+      const up = new t.T.Vector3(0, 1, 0);
+      for (const [li, p] of s.lines) {
+        const l = CUBE_LINES[li], a = t.meshes[l[0]].position, b = t.meshes[l[2]].position;
+        const dir = new t.T.Vector3().subVectors(b, a), len = dir.length();
+        const rod = new t.T.Mesh(new t.T.CylinderGeometry(0.07, 0.07, len + 0.7, 12),
+          new t.T.MeshBasicMaterial({ color: p === 1 ? red : blue }));
+        rod.position.addVectors(a, b).multiplyScalar(0.5);
+        rod.quaternion.setFromUnitVectors(up, dir.normalize());
+        t.rods.add(rod);
+      }
+      t.draw();
+    }
+  };
+
   function drawCell(el, v, pop) {
     if (el.dataset.v === String(v)) return;
     el.innerHTML = v === 1 ? X_SVG : v === 2 ? O_SVG : "";
@@ -917,7 +1228,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   }
 
   // ================= App =================
-  const GAMES = { normal: Normal, ultimate: Ultimate, supreme: Supreme };
+  const GAMES = { normal: Normal, ultimate: Ultimate, supreme: Supreme, cube: Cube };
   let gameKey = "ultimate";
   let G = Ultimate;
   let state = G.newState();
@@ -1033,12 +1344,12 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     $("status").classList.toggle("thinking", thinking);
     if (s.winner === 3) {
       chip.style.background = "var(--muted)"; chip.innerHTML = "";
-      main.textContent = "It's a draw."; sub.textContent = G.drawText;
+      main.textContent = "It's a draw."; sub.textContent = (G.scoreText ? G.scoreText(s) + " " : "") + G.drawText;
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
       main.textContent = NAME[s.winner] + " wins.";
-      sub.textContent = online ? (s.winner === online.side ? "You win!" : online.oppName + " wins.")
-        : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "";
+      sub.textContent = (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : online.oppName + " wins.")
+        : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "");
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
       if (online) main.textContent = s.turn === online.side ? "Your turn (" + NAME[s.turn] + ")" : online.oppName + "'s turn";
@@ -1212,12 +1523,14 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   const DIFF_NOTES = {
     normal: { easy: "Makes lots of mistakes.", medium: "Plays well but sometimes slips up.", hard: "Never loses. The best you can do is a draw." },
     ultimate: { easy: "Mostly random moves.", medium: "Thinks a few moves ahead.", hard: "Thinks for longer. Tough to beat." },
-    supreme: { easy: "Mostly random moves.", medium: "Thinks a little ahead.", hard: "Thinks for longer before each move." }
+    supreme: { easy: "Mostly random moves.", medium: "Thinks a little ahead.", hard: "Thinks for longer before each move." },
+    cube: { easy: "Mostly random moves.", medium: "Plays well but sometimes slips up.", hard: "Thinks for longer. Tough to beat." }
   };
   const DESC = {
     normal: "The classic game. Get three in a row.",
     ultimate: "Nine boards in one. Your move decides where your opponent plays next.",
-    supreme: "Nine Ultimate games in one. 729 cells. Win a small board to send play to another game."
+    supreme: "Nine Ultimate games in one. 729 cells. Win a small board to send play to another game.",
+    cube: "Experimental. A 3×3×3 cube. Fill it up; whoever makes more lines of three wins."
   };
 
   function summary() {
@@ -1256,6 +1569,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     board.appendChild(endOv);
     $("boardWrap").classList.toggle("sup", G === Supreme);
     if (G !== Supreme) $("zoomBar").hidden = true;
+    if (G !== Cube) $("floorBar").hidden = true;
     $("gameTitle").textContent = G.title;
     $("play").classList.toggle("wide", G === Supreme);
     showScreen("play");
