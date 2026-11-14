@@ -226,8 +226,10 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .btn.back { padding: 8px 12px; }
 
 .rules { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
-.rules h3 { font-weight: 600; font-size: 16px; margin: 0 0 6px; }
-.rules-soon { margin: 0; color: var(--muted); font-size: 14px; }
+.rules-btn { width: 100%; }
+.rules-list { margin: 0; padding-left: 22px; display: grid; gap: 14px; color: var(--muted); font-size: 16px; }
+.rules-list b { color: var(--ink); font-weight: 600; }
+.rules-soon { margin: 0; color: var(--muted); font-size: 16px; }
 .mode-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .rules ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: 14px; }
 .rules ol b { color: var(--ink); font-weight: 600; }
@@ -263,10 +265,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         <h2>Normal</h2>
         <p>The classic. Get three in a row.</p>
       </button>
-      <section class="rules" aria-labelledby="rh-normal">
-        <h3 id="rh-normal">Rules</h3>
-        <ol id="rules-normal"></ol>
-      </section>
+      <button type="button" class="btn rules-btn" id="rules-normal" data-rules="normal">Rules</button>
       </div>
       <div class="mode-col">
       <button type="button" class="mode" id="pick-ultimate" data-game="ultimate">
@@ -277,10 +276,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         <h2>Ultimate</h2>
         <p>Nine boards in one. Your move decides where your opponent plays next.</p>
       </button>
-      <section class="rules" aria-labelledby="rh-ultimate">
-        <h3 id="rh-ultimate">Rules</h3>
-        <ol id="rules-ultimate"></ol>
-      </section>
+      <button type="button" class="btn rules-btn" id="rules-ultimate" data-rules="ultimate">Rules</button>
       </div>
       <div class="mode-col">
       <button type="button" class="mode" id="pick-supreme" disabled>
@@ -296,11 +292,23 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         <h2>Supreme <span class="soon">Coming soon</span></h2>
         <p>The next level up. Not ready yet.</p>
       </button>
-      <section class="rules" aria-labelledby="rh-supreme">
-        <h3 id="rh-supreme">Rules</h3>
-        <p class="rules-soon">Rules coming soon.</p>
-      </section>
+      <button type="button" class="btn rules-btn" id="rules-supreme" data-rules="supreme">Rules</button>
       </div>
+    </div>
+  </section>
+
+  <!-- ===== Rules screen ===== -->
+  <section class="setup" id="rulesScreen" hidden>
+    <button type="button" class="btn back" id="rulesBack">← Menu</button>
+    <div>
+      <span class="label">Rules</span>
+      <h1 id="rulesTitle">Normal</h1>
+      <p class="lede" id="rulesDesc"></p>
+    </div>
+    <div class="setup-card">
+      <ol class="rules-list" id="rulesList"></ol>
+      <p class="rules-soon" id="rulesSoon" hidden>The rules for Supreme are coming soon.</p>
+      <button type="button" class="btn primary start" id="rulesPlay">Play Normal</button>
     </div>
   </section>
 
@@ -812,7 +820,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   function showScreen(id) {
     gameId++; thinking = false;
-    for (const s of ["menu", "setup", "play"]) $(s).hidden = s !== id;
+    for (const s of ["menu", "rulesScreen", "setup", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -872,9 +880,23 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   $("startBtn").addEventListener("click", startGame);
   $("endNew").addEventListener("click", newGame);
   $("restartBtn").addEventListener("click", newGame);
-  // Rules panels under each game on the menu.
-  $("rules-normal").innerHTML = Normal.rules.map(r => "<li>" + r + "</li>").join("");
-  $("rules-ultimate").innerHTML = Ultimate.rules.map(r => "<li>" + r + "</li>").join("");
+  // Rules screen, opened from the Rules button under each game on the menu.
+  let rulesKey = "normal";
+  function openRules(key) {
+    rulesKey = key;
+    const g = GAMES[key];
+    $("rulesTitle").textContent = g ? g.title : "Supreme";
+    $("rulesDesc").textContent = g ? DESC[key] : "The next level up. Still being made.";
+    $("rulesList").innerHTML = g ? g.rules.map(r => "<li>" + r + "</li>").join("") : "";
+    $("rulesList").hidden = !g;
+    $("rulesSoon").hidden = !!g;
+    $("rulesPlay").hidden = !g;
+    if (g) $("rulesPlay").textContent = "Play " + g.title;
+    showScreen("rulesScreen");
+  }
+  for (const btn of document.querySelectorAll("[data-rules]")) btn.addEventListener("click", () => openRules(btn.dataset.rules));
+  $("rulesBack").addEventListener("click", showMenu);
+  $("rulesPlay").addEventListener("click", () => openSetup(rulesKey));
   $("endMenu").addEventListener("click", showMenu);
   board.addEventListener("click", e => {
     const btn = e.target.closest(".cell");
