@@ -85,6 +85,20 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .soon { font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--cell); color: var(--muted); border: 1px solid var(--line); }
 .menu-score { margin-top: 22px; color: var(--muted); font-size: 14px; }
 
+/* ---------- Setup screen ---------- */
+.setup { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; padding-top: clamp(0px, 2vw, 20px); }
+.setup .btn.back { align-self: flex-start; }
+.setup h1 { font-weight: 800; font-size: clamp(32px, 6vw, 48px); letter-spacing: -0.025em; line-height: 1; }
+.setup .lede { color: var(--muted); font-size: 16px; margin: 8px 0 0; }
+.setup-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: clamp(16px, 4vw, 24px); display: flex; flex-direction: column; gap: 22px; box-shadow: var(--shadow); }
+.setup-card .seg { background: var(--cell); border-color: transparent; }
+.setup-card .seg button { padding: 12px 8px; font-size: 15px; }
+.setup-card .seg button:hover { background: var(--cell-hover); }
+.note { margin: 0; color: var(--muted); font-size: 14px; min-height: 1.5em; }
+.btn.start { padding: 14px; font-size: 16px; border-radius: 12px; }
+.summary { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.summary p { margin: 0; font-weight: 600; }
+
 /* ---------- Game screen ---------- */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
@@ -249,6 +263,43 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     </div>
   </section>
 
+  <!-- ===== Game setup ===== -->
+  <section class="setup" id="setup" hidden>
+    <button type="button" class="btn back" id="setupBack">← Menu</button>
+    <div>
+      <h1 id="setupTitle">Ultimate</h1>
+      <p class="lede" id="setupDesc"></p>
+    </div>
+    <div class="setup-card">
+      <div class="group">
+        <span class="label" id="oppLabel">Opponent</span>
+        <div class="seg" role="group" aria-labelledby="oppLabel">
+          <button type="button" id="opp-ai" data-opp="ai">Computer</button>
+          <button type="button" id="opp-2p" data-opp="2p">Friend</button>
+        </div>
+        <p class="note" id="oppNote"></p>
+      </div>
+      <div class="group" id="diffGroup">
+        <span class="label" id="diffLabel">Difficulty</span>
+        <div class="seg" role="group" aria-labelledby="diffLabel">
+          <button type="button" id="diff-easy" data-diff="easy">Easy</button>
+          <button type="button" id="diff-medium" data-diff="medium">Medium</button>
+          <button type="button" id="diff-hard" data-diff="hard">Hard</button>
+        </div>
+        <p class="note" id="diffNote"></p>
+      </div>
+      <div class="group" id="sideGroup">
+        <span class="label" id="sideLabel">You play</span>
+        <div class="seg" role="group" aria-labelledby="sideLabel">
+          <button type="button" id="side-1" class="opt-red" data-side="1">Red</button>
+          <button type="button" id="side-2" class="opt-blue" data-side="2">Blue</button>
+        </div>
+        <p class="note" id="sideNote"></p>
+      </div>
+      <button type="button" class="btn primary start" id="startBtn">Start game</button>
+    </div>
+  </section>
+
   <!-- ===== Game screen ===== -->
   <section id="play" hidden>
     <div class="topbar">
@@ -273,25 +324,10 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       </main>
 
       <aside class="rail">
-        <div class="group">
-          <span class="label" id="oppLabel">Opponent</span>
-          <div class="seg" role="group" aria-labelledby="oppLabel">
-            <button type="button" id="opp-ai" data-opp="ai">Computer</button>
-            <button type="button" id="opp-2p" data-opp="2p">Friend</button>
-          </div>
-        </div>
-        <div class="group" id="aiOpts">
-          <span class="label" id="diffLabel">Difficulty</span>
-          <div class="seg" role="group" aria-labelledby="diffLabel">
-            <button type="button" id="diff-easy" data-diff="easy">Easy</button>
-            <button type="button" id="diff-medium" data-diff="medium">Medium</button>
-            <button type="button" id="diff-hard" data-diff="hard">Hard</button>
-          </div>
-          <span class="label" id="sideLabel" style="margin-top:6px">You play</span>
-          <div class="seg" role="group" aria-labelledby="sideLabel">
-            <button type="button" id="side-1" class="opt-red" data-side="1">Red (first)</button>
-            <button type="button" id="side-2" class="opt-blue" data-side="2">Blue</button>
-          </div>
+        <div class="summary">
+          <span class="label">Settings</span>
+          <p id="summaryText">Computer · Medium · You are Red</p>
+          <button type="button" class="btn" id="settingsBtn">Change settings</button>
         </div>
         <div class="actions">
           <button type="button" class="btn primary" id="newBtn">New game</button>
@@ -635,10 +671,6 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     if (s.winner && !counted) { sc[s.winner]++; counted = true; save(); }
     $("sc1").textContent = sc[1]; $("sc2").textContent = sc[2]; $("sc3").textContent = sc[3];
 
-    for (const btn of document.querySelectorAll("[data-opp]")) btn.setAttribute("aria-pressed", btn.dataset.opp === settings.opp);
-    for (const btn of document.querySelectorAll("[data-diff]")) btn.setAttribute("aria-pressed", btn.dataset.diff === settings.diff);
-    for (const btn of document.querySelectorAll("[data-side]")) btn.setAttribute("aria-pressed", String(settings.side) === btn.dataset.side);
-    $("aiOpts").hidden = settings.opp !== "ai";
     $("undoBtn").disabled = thinking || !canUndo();
   }
 
@@ -724,27 +756,67 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     maybeComputer();
   }
 
-  function startGame(key) {
+  function showScreen(id) {
+    gameId++; thinking = false;
+    for (const s of ["menu", "setup", "play"]) $(s).hidden = s !== id;
+    if (id !== "play") document.body.classList.remove("turn-2");
+    window.scrollTo(0, 0);
+  }
+
+  const DIFF_NOTES = {
+    normal: { easy: "Makes lots of mistakes.", medium: "Plays well but sometimes slips up.", hard: "Never loses. The best you can do is a draw." },
+    ultimate: { easy: "Mostly random moves.", medium: "Thinks a few moves ahead.", hard: "Thinks for longer. Tough to beat." }
+  };
+  const DESC = {
+    normal: "The classic game. Get three in a row.",
+    ultimate: "Nine boards in one. Your move decides where your opponent plays next."
+  };
+
+  function summary() {
+    if (settings.opp === "2p") return "Friend · Take turns on this screen";
+    const d = settings.diff[0].toUpperCase() + settings.diff.slice(1);
+    return "Computer · " + d + " · You are " + NAME[settings.side];
+  }
+
+  function renderSetup() {
+    for (const btn of document.querySelectorAll("[data-opp]")) btn.setAttribute("aria-pressed", btn.dataset.opp === settings.opp);
+    for (const btn of document.querySelectorAll("[data-diff]")) btn.setAttribute("aria-pressed", btn.dataset.diff === settings.diff);
+    for (const btn of document.querySelectorAll("[data-side]")) btn.setAttribute("aria-pressed", String(settings.side) === btn.dataset.side);
+    const ai = settings.opp === "ai";
+    $("diffGroup").hidden = !ai;
+    $("sideGroup").hidden = !ai;
+    $("oppNote").textContent = ai ? "Play against the computer." : "Two players take turns on this screen. Red goes first.";
+    $("diffNote").textContent = DIFF_NOTES[gameKey][settings.diff];
+    $("sideNote").textContent = settings.side === 1 ? "Red goes first." : "The computer plays Red and goes first.";
+  }
+
+  function openSetup(key) {
     gameKey = key; G = GAMES[key];
+    $("setupTitle").textContent = G.title;
+    $("setupDesc").textContent = DESC[key];
+    renderSetup();
+    showScreen("setup");
+    $("startBtn").focus({ preventScroll: true });
+  }
+
+  function startGame() {
     board.innerHTML = "";
     G.build(board);
     $("gameTitle").textContent = G.title;
     $("rulesList").innerHTML = G.rules.map(r => "<li>" + r + "</li>").join("");
-    $("menu").hidden = true; $("play").hidden = false;
-    window.scrollTo(0, 0);
+    $("summaryText").textContent = summary();
+    showScreen("play");
     newGame();
   }
 
-  function showMenu() {
-    gameId++; thinking = false;
-    $("play").hidden = true; $("menu").hidden = false;
-    document.body.classList.remove("turn-2");
-    window.scrollTo(0, 0);
-  }
+  function showMenu() { showScreen("menu"); }
 
   // ---------- Events ----------
-  for (const btn of document.querySelectorAll("[data-game]")) btn.addEventListener("click", () => startGame(btn.dataset.game));
+  for (const btn of document.querySelectorAll("[data-game]")) btn.addEventListener("click", () => openSetup(btn.dataset.game));
   $("menuBtn").addEventListener("click", showMenu);
+  $("setupBack").addEventListener("click", showMenu);
+  $("startBtn").addEventListener("click", startGame);
+  $("settingsBtn").addEventListener("click", () => openSetup(gameKey));
   board.addEventListener("click", e => {
     const btn = e.target.closest(".cell");
     if (!btn || btn.disabled) return;
@@ -764,16 +836,13 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     render();
   });
   for (const btn of document.querySelectorAll("[data-opp]")) btn.addEventListener("click", () => {
-    if (settings.opp === btn.dataset.opp) return;
-    settings.opp = btn.dataset.opp; save(); newGame();
+    settings.opp = btn.dataset.opp; save(); renderSetup();
   });
   for (const btn of document.querySelectorAll("[data-diff]")) btn.addEventListener("click", () => {
-    settings.diff = btn.dataset.diff; save(); render();
+    settings.diff = btn.dataset.diff; save(); renderSetup();
   });
   for (const btn of document.querySelectorAll("[data-side]")) btn.addEventListener("click", () => {
-    const side = +btn.dataset.side;
-    if (settings.side === side) return;
-    settings.side = side; save(); newGame();
+    settings.side = +btn.dataset.side; save(); renderSetup();
   });
 })();
 </script>
