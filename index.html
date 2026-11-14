@@ -1150,8 +1150,8 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
           mesh.scale.setScalar(0.5);
         } else {
           const hov = i === this.hover;
-          mat.color.copy(hov ? turn : muted); mat.opacity = hov ? 0.55 : 0.08; mat.depthWrite = false;
-          out.color.copy(hov ? turn : muted); out.opacity = hov ? 0.95 : 0.45;
+          mat.color.copy(hov ? turn : muted); mat.opacity = hov ? 0.7 : 0.3; mat.depthWrite = false;
+          out.color.copy(hov ? turn : muted); out.opacity = hov ? 1 : 0.75;
           mesh.scale.setScalar(hov ? 1.05 : 1);
         }
         mat.needsUpdate = true;
