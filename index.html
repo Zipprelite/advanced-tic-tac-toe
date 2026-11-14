@@ -444,7 +444,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   </section>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
 <script>
 (() => {
   const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
@@ -985,30 +985,39 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   const pickGame = key => settings.where === "online" ? startQueue(key) : openSetup(key);
 
   // ================= Online play =================
-  // Matchmaking uses the free PeerJS service. For each game there is one shared
-  // "waiting spot" ID. The first player to queue takes it and waits. The next
-  // player finds it taken, connects to the waiting player, and the game starts.
-  // The waiting player then frees the spot for the next pair. Moves go directly
-  // between the two browsers.
-  const PEER_OPTS = { debug: 0 };
-  const lobbyId = key => "zipprelite-advttt-v1-" + key + "-lobby";
+  // Players meet through a free public MQTT message server over a secure
+  // WebSocket, so it works on phones, mobile data and most Wi-Fi networks.
+  // Each game has one shared "waiting" slot. The first player to queue fills it
+  // and waits. The next player sees it and asks to join. The waiting player
+  // accepts, clears the slot, and the game starts. After that, each player's
+  // moves are sent to the other player's inbox.
+  const BROKERS = ["wss://broker.emqx.io:8084/mqtt", "wss://broker.hivemq.com:8884/mqtt"];
+  const ROOT = "zipprelite-advttt/v1/";
+  const waitTopic = key => ROOT + "wait/" + key;
+  const inbox = id => ROOT + "p/" + id;
+  const STALE_MS = 40000;
   const rand = (a, b) => a + Math.random() * (b - a);
+  const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const fresh = d => !!d && typeof d.id === "string" && typeof d.ts === "number" && Math.abs(Date.now() - d.ts) < STALE_MS;
 
   function later(n, fn, ms) {
     n.timers.push(setTimeout(() => { if (!n.dead) fn(); }, ms));
   }
+  function pub(n, topic, obj, retain) {
+    try { n.client.publish(topic, obj == null ? "" : JSON.stringify(obj), { qos: 1, retain: !!retain }); } catch (e) {}
+  }
   function send(msg) {
-    if (!online || !online.conn) return;
-    try { online.conn.send(msg); } catch (e) {}
+    if (!online || !net) return;
+    pub(net, inbox(online.oppId), Object.assign({ from: net.id }, msg));
   }
   function leaveOnline() {
-    if (online) send({ t: "bye" });
     if (net) {
       const n = net;
+      if (online) send({ t: "bye" });
+      if (n.hosting) pub(n, waitTopic(n.key), null, true);   // free the waiting slot
       n.dead = true;
       n.timers.forEach(clearTimeout);
-      try { if (n.lobby) n.lobby.destroy(); } catch (e) {}
-      setTimeout(() => { try { if (n.me) n.me.destroy(); } catch (e) {} }, 300);
+      setTimeout(() => { try { n.client.end(); } catch (e) {} }, 400);
     }
     net = null; online = null;
   }
@@ -1025,113 +1034,126 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     gameKey = key; G = GAMES[key];
     $("queueTitle").textContent = "Queuing for " + G.title + " Tic-Tac-Toe";
     showScreen("queueScreen");
-    if (typeof Peer === "undefined") {
+    if (typeof mqtt === "undefined") {
       queueStatus("Online play couldn't load. Check your internet connection, then try again.", true);
       return;
     }
     queueStatus("Connecting…");
-    const n = net = { key, dead: false, timers: [], me: null, lobby: null, matched: false, attempt: 0 };
-    n.me = new Peer(undefined, PEER_OPTS);
-    n.me.on("open", () => { if (!n.dead) { queueStatus("Waiting for another player…"); tryHost(n); } });
-    n.me.on("connection", conn => hostIncoming(n, conn));
-    n.me.on("disconnected", () => { if (!n.dead && !n.matched) { try { n.me.reconnect(); } catch (e) {} } });
-    n.me.on("error", err => {
-      if (n.dead) return;
-      if (err.type === "peer-unavailable") {
-        // The player we tried to reach has gone. Go back to queuing.
-        if (!n.matched) { n.attempt++; later(n, () => tryHost(n), rand(400, 1200)); }
-      } else if (!n.matched && ["network", "server-error", "socket-error", "socket-closed", "browser-incompatible", "ssl-unavailable"].includes(err.type)) {
-        queueStatus("Couldn't reach the matchmaking server. Check your internet connection, then try again.", true);
-        n.dead = true;
-      }
-    });
+    connectBroker(key, 0);
   }
 
-  // Try to take the waiting spot for this game.
-  function tryHost(n) {
-    if (n.dead || n.matched || n.lobby) return;
-    const lobby = new Peer(lobbyId(n.key), PEER_OPTS);
-    n.lobby = lobby;
-    lobby.on("connection", c => {
-      c.on("open", () => {
-        // Tell the other player how to reach us directly.
-        c.send(n.matched || n.dead ? { t: "busy" } : { t: "hello", id: n.me.id });
-        setTimeout(() => { try { c.close(); } catch (e) {} }, 1500);
+  function connectBroker(key, bi) {
+    const n = net = {
+      key, id: newId(), dead: false, timers: [], client: null, attempt: 0,
+      matched: false, hosting: false, seen: null, joining: null, lastSeen: 0
+    };
+    const client = n.client = mqtt.connect(BROKERS[bi], {
+      clientId: "advttt_" + n.id, clean: true, keepalive: 20, reconnectPeriod: 2000, connectTimeout: 8000
+    });
+    let connected = false;
+    // If this server can't be reached, try the next one.
+    later(n, () => {
+      if (connected) return;
+      n.dead = true;
+      try { client.end(true); } catch (e) {}
+      if (net !== n) return;
+      if (bi + 1 < BROKERS.length) connectBroker(key, bi + 1);
+      else queueStatus("Couldn't reach the matchmaking server. Check your internet connection, then try again.", true);
+    }, 9000);
+    client.on("connect", () => {
+      if (n.dead) return;
+      const first = !connected;
+      connected = true;
+      client.subscribe([inbox(n.id), waitTopic(key)], { qos: 1 }, () => {
+        if (first && !n.matched) {
+          queueStatus("Waiting for another player…");
+          later(n, () => decide(n), 1500);   // give the server time to send who's waiting
+        }
       });
     });
-    lobby.on("error", err => {
+    client.on("message", (topic, buf) => {
       if (n.dead) return;
-      try { lobby.destroy(); } catch (e) {}
-      if (n.lobby === lobby) n.lobby = null;
-      if (err.type === "unavailable-id") tryJoin(n);          // someone is already waiting
-      else later(n, () => tryHost(n), rand(1500, 2500));
+      const s = buf.toString();
+      let d = null;
+      if (s) { try { d = JSON.parse(s); } catch (e) { return; } }
+      if (topic === waitTopic(key)) onWaiting(n, d);
+      else if (topic === inbox(n.id) && d && typeof d === "object") onInbox(n, d);
     });
   }
 
-  // Someone is waiting: ask them for their direct address.
-  function tryJoin(n) {
-    if (n.dead || n.matched) return;
+  // Someone else filled (or cleared) the waiting slot.
+  function onWaiting(n, d) {
+    n.seen = d;
+    if (n.matched || !fresh(d) || d.id === n.id) return;
+    // Two players started waiting at the same moment: the one with the
+    // larger ID gives way and joins the other.
+    if (n.hosting && d.id < n.id) { n.hosting = false; askJoin(n, d); }
+  }
+
+  function decide(n) {
+    if (n.dead || n.matched || n.hosting || n.joining) return;
+    const d = n.seen;
+    if (fresh(d) && d.id !== n.id) askJoin(n, d);
+    else host(n);
+  }
+
+  // Fill the waiting slot, and keep it fresh while we wait.
+  function host(n) {
+    n.hosting = true;
+    const beat = () => {
+      if (!n.hosting || n.matched || n.dead) return;
+      pub(n, waitTopic(n.key), { id: n.id, name: username, ts: Date.now() }, true);
+      later(n, beat, 15000);
+    };
+    beat();
+  }
+
+  function askJoin(n, d) {
     const a = ++n.attempt;
-    const c = n.me.connect(lobbyId(n.key), { reliable: true });
-    c.on("data", d => {
-      if (a !== n.attempt) return;
-      try { c.close(); } catch (e) {}
-      if (d && d.t === "hello" && typeof d.id === "string") joinHost(n, d.id);
-      else { n.attempt++; later(n, () => tryHost(n), rand(800, 2000)); }
-    });
+    n.joining = d.id;
+    pub(n, inbox(d.id), { t: "join", from: n.id, name: username });
     later(n, () => {
-      if (a !== n.attempt) return;
-      n.attempt++;
-      try { c.close(); } catch (e) {}
-      tryHost(n);
+      if (a !== n.attempt || n.matched) return;
+      // No answer: that player has gone. Take the waiting slot instead.
+      n.joining = null; n.seen = null;
+      host(n);
     }, 6000);
   }
 
-  // Connect directly to the waiting player.
-  function joinHost(n, hostId) {
-    const a = ++n.attempt;
-    const conn = n.me.connect(hostId, { reliable: true });
-    conn.on("open", () => { if (a === n.attempt) conn.send({ t: "join", name: username }); });
-    conn.on("data", d => {
-      if (!d || typeof d !== "object") return;
-      if (d.t === "start" && !n.matched && a === n.attempt) {
-        n.matched = true; n.attempt++;
-        beginMatch(conn, d.side === 1 ? 1 : 2, cleanName(d.name) || "Player");
-      } else if (d.t === "busy" && a === n.attempt) {
-        n.attempt++;
-        try { conn.close(); } catch (e) {}
-        later(n, () => tryHost(n), rand(800, 2000));
-      } else if (online && online.conn === conn) onGameData(d);
-    });
-    later(n, () => {
-      if (a !== n.attempt) return;
-      n.attempt++;
-      try { conn.close(); } catch (e) {}
-      tryHost(n);
-    }, 8000);
+  function onInbox(n, d) {
+    if (d.t === "join" && typeof d.from === "string") {
+      if (n.matched || !n.hosting) { pub(n, inbox(d.from), { t: "busy", from: n.id }); return; }
+      n.matched = true; n.hosting = false; n.attempt++;
+      pub(n, waitTopic(n.key), null, true);   // free the waiting slot
+      const mySide = Math.random() < 0.5 ? 1 : 2;
+      pub(n, inbox(d.from), { t: "start", from: n.id, side: 3 - mySide, name: username });
+      beginMatch(n, d.from, mySide, cleanName(d.name) || "Player");
+      return;
+    }
+    if (d.t === "start" && d.from === n.joining && !n.matched) {
+      n.matched = true; n.attempt++; n.joining = null;
+      beginMatch(n, d.from, d.side === 1 ? 1 : 2, cleanName(d.name) || "Player");
+      return;
+    }
+    if (d.t === "busy" && d.from === n.joining && !n.matched) {
+      n.attempt++; n.joining = null; n.seen = null;
+      later(n, () => decide(n), rand(500, 1500));
+      return;
+    }
+    if (online && d.from === online.oppId) { n.lastSeen = Date.now(); onGameData(d); }
   }
 
-  // We're waiting and another player connected directly.
-  function hostIncoming(n, conn) {
-    conn.on("data", d => {
-      if (!d || typeof d !== "object") return;
-      if (d.t === "join") {
-        if (n.matched || n.dead) { conn.send({ t: "busy" }); setTimeout(() => { try { conn.close(); } catch (e) {} }, 300); return; }
-        n.matched = true; n.attempt++;
-        try { if (n.lobby) n.lobby.destroy(); } catch (e) {}   // free the waiting spot
-        n.lobby = null;
-        const mySide = Math.random() < 0.5 ? 1 : 2;
-        conn.send({ t: "start", side: 3 - mySide, name: username });
-        beginMatch(conn, mySide, cleanName(d.name) || "Player");
-      } else if (online && online.conn === conn) onGameData(d);
-    });
-  }
-
-  function beginMatch(conn, side, oppName) {
-    online = { conn, side, oppName, myReq: false, theirReq: false, left: false };
-    const gone = () => { if (online && online.conn === conn && !online.left) { online.left = true; render(); } };
-    conn.on("close", gone);
-    conn.on("error", gone);
+  function beginMatch(n, oppId, side, oppName) {
+    online = { oppId, side, oppName, myReq: false, theirReq: false, left: false };
+    n.lastSeen = Date.now();
+    // Check every few seconds that the other player is still there.
+    const ping = () => {
+      if (!online) return;
+      send({ t: "ping" });
+      if (!online.left && Date.now() - n.lastSeen > 20000) { online.left = true; render(); }
+      later(n, ping, 5000);
+    };
+    later(n, ping, 5000);
     startGame();
   }
 
