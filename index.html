@@ -96,8 +96,24 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .setup-card .seg button:hover { background: var(--cell-hover); }
 .note { margin: 0; color: var(--muted); font-size: 14px; min-height: 1.5em; }
 .btn.start { padding: 14px; font-size: 16px; border-radius: 12px; }
-.summary { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.summary p { margin: 0; font-weight: 600; }
+/* End-of-game: board fades, message card appears over it */
+#board > * { transition: opacity 0.4s ease; }
+#board.ended > :not(.endov):not(.winsvg) { opacity: 0.28; }
+#board.ended > .winsvg { opacity: 0.7; }
+#board.ended-anim > * { transition-delay: 0.65s; }
+.endov { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 16px; }
+.endcard {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
+  padding: 22px 26px; text-align: center; display: flex; flex-direction: column; gap: 6px; max-width: 100%;
+}
+.endcard h2 { font-weight: 800; font-size: clamp(28px, 6vw, 40px); letter-spacing: -0.02em; line-height: 1.05; }
+.endcard.w1 h2 { color: var(--red); }
+.endcard.w2 h2 { color: var(--blue); }
+.endcard p { margin: 0 0 10px; color: var(--muted); font-size: 17px; font-weight: 600; }
+.endbtns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.endbtns .btn { padding: 11px 20px; font-size: 15px; }
+.endov.anim .endcard { animation: endin 0.35s cubic-bezier(.2,.8,.3,1.2) 0.7s both; }
+@keyframes endin { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 
 /* ---------- Game screen ---------- */
 .topbar {
@@ -213,6 +229,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .pop, .thinking .dots::after { animation: none; }
   .winsvg.anim line { animation: none; stroke-dashoffset: 0; }
+  .endov.anim .endcard { animation: none; }
   * { transition: none !important; }
 }
 </style>
@@ -321,18 +338,20 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
           <span><span id="statusMain">Red's turn</span> <span class="sub" id="statusSub"></span></span>
         </div>
         <div id="board" role="grid" aria-label="Game board"></div>
+        <div class="endov" id="endOv" hidden>
+          <div class="endcard" role="dialog" aria-labelledby="endTitle">
+            <h2 id="endTitle">Red wins.</h2>
+            <p>New game?</p>
+            <div class="endbtns">
+              <button type="button" class="btn primary" id="endNew">New game</button>
+              <button type="button" class="btn" id="endMenu">Menu</button>
+            </div>
+          </div>
+        </div>
       </main>
 
       <aside class="rail">
-        <div class="summary">
-          <span class="label">Settings</span>
-          <p id="summaryText">Computer · Medium · You are Red</p>
-          <button type="button" class="btn" id="settingsBtn">Change settings</button>
-        </div>
-        <div class="actions">
-          <button type="button" class="btn primary" id="newBtn">New game</button>
-          <button type="button" class="btn" id="undoBtn">Undo</button>
-        </div>
+        <button type="button" class="btn" id="undoBtn">Undo last move</button>
         <section class="rules">
           <h2>How to play</h2>
           <ol id="rulesList"></ol>
@@ -623,6 +642,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   const $ = id => document.getElementById(id);
   const board = $("board");
+  const endOv = $("endOv");
   const isComputerTurn = () => settings.opp === "ai" && !state.winner && state.turn !== settings.side;
 
   // Small Ultimate illustration on the menu card.
@@ -649,6 +669,19 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
     G.render(board, s, moves, locked, popMove);
     drawWinLine(popMove !== undefined);
+
+    // End-of-game message over a faded board.
+    const justEnded = !!s.winner && popMove !== undefined;
+    board.classList.toggle("ended", !!s.winner);
+    board.classList.toggle("ended-anim", justEnded);
+    endOv.classList.toggle("anim", justEnded);
+    endOv.hidden = !s.winner;
+    if (s.winner) {
+      const card = endOv.firstElementChild;
+      card.className = "endcard" + (s.winner === 3 ? "" : " w" + s.winner);
+      $("endTitle").textContent = s.winner === 3 ? "It's a draw." : NAME[s.winner] + " wins.";
+      if (justEnded) $("endNew").focus({ preventScroll: true });
+    }
 
     const chip = $("chip"), main = $("statusMain"), sub = $("statusSub");
     $("status").classList.toggle("thinking", thinking);
@@ -800,11 +833,12 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   }
 
   function startGame() {
+    endOv.remove();
     board.innerHTML = "";
     G.build(board);
+    board.appendChild(endOv);
     $("gameTitle").textContent = G.title;
     $("rulesList").innerHTML = G.rules.map(r => "<li>" + r + "</li>").join("");
-    $("summaryText").textContent = summary();
     showScreen("play");
     newGame();
   }
@@ -816,13 +850,13 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   $("menuBtn").addEventListener("click", showMenu);
   $("setupBack").addEventListener("click", showMenu);
   $("startBtn").addEventListener("click", startGame);
-  $("settingsBtn").addEventListener("click", () => openSetup(gameKey));
+  $("endNew").addEventListener("click", newGame);
+  $("endMenu").addEventListener("click", showMenu);
   board.addEventListener("click", e => {
     const btn = e.target.closest(".cell");
     if (!btn || btn.disabled) return;
     play(+btn.dataset.m);
   });
-  $("newBtn").addEventListener("click", newGame);
   $("undoBtn").addEventListener("click", () => {
     if (thinking || !canUndo()) return;
     if (state.winner && counted) { const sc = score[gameKey]; sc[state.winner] = Math.max(0, sc[state.winner] - 1); counted = false; save(); }
