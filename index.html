@@ -936,17 +936,30 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   // Small Ultimate illustration on the menu card.
   (function drawSupArt() {
+    // Three levels: 9 Ultimate games, each with 9 small boards, each with 9 cells.
     const svg = $("supArt");
-    let h = '<path d="M30 3V87M60 3V87M3 30H87M3 60H87" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round"/>';
+    let h = '<path d="M30 2V88M60 2V88M2 30H88M2 60H88" stroke="var(--muted)" stroke-width="2.2" stroke-linecap="round"/>';
+    let boards = "", cells = "";
     for (let g = 0; g < 9; g++) {
-      const ox = (g % 3) * 30 + 4, oy = ((g / 3) | 0) * 30 + 4;
-      h += `<path d="M${ox+7.3} ${ox ? oy+1 : oy+1}V${oy+21}M${ox+14.7} ${oy+1}V${oy+21}M${ox+1} ${oy+7.3}H${ox+21}M${ox+1} ${oy+14.7}H${ox+21}" stroke="var(--line)" stroke-width="1"/>`;
+      const gx = (g % 3) * 30 + 3, gy = ((g / 3) | 0) * 30 + 3;
+      boards += `M${gx+8} ${gy}V${gy+24}M${gx+16} ${gy}V${gy+24}M${gx} ${gy+8}H${gx+24}M${gx} ${gy+16}H${gx+24}`;
+      for (let b = 0; b < 9; b++) {
+        const bx = gx + (b % 3) * 8, by = gy + ((b / 3) | 0) * 8;
+        const a = (bx + 8/3).toFixed(2), c = (bx + 16/3).toFixed(2), d = (by + 8/3).toFixed(2), e = (by + 16/3).toFixed(2);
+        cells += `M${a} ${by+1}V${by+7}M${c} ${by+1}V${by+7}M${bx+1} ${d}H${bx+7}M${bx+1} ${e}H${bx+7}`;
+      }
     }
-    h += '<rect x="31.5" y="31.5" width="27" height="27" rx="3" fill="none" stroke="var(--red)" stroke-width="2"/>';
-    h += '<path d="M9 9L22 22M22 9L9 22" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>';
-    h += '<circle cx="75" cy="75" r="8" stroke="var(--blue)" stroke-width="3" fill="none"/>';
-    h += '<path d="M40 40L43 43M43 40L40 43" stroke="var(--red)" stroke-width="1.4" stroke-linecap="round"/>';
-    h += '<circle cx="49.5" cy="49.5" r="1.8" stroke="var(--blue)" stroke-width="1.2" fill="none"/>';
+    h += `<path d="${cells}" stroke="var(--muted)" stroke-opacity="0.35" stroke-width="0.35" fill="none"/>`;
+    h += `<path d="${boards}" stroke="var(--muted)" stroke-opacity="0.75" stroke-width="0.9" fill="none"/>`;
+    // A won Ultimate game for each side.
+    h += '<path d="M6 6L24 24M24 6L6 24" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>';
+    h += '<circle cx="75" cy="75" r="9" stroke="var(--blue)" stroke-width="3" fill="none"/>';
+    // Won small boards inside the center game.
+    h += '<path d="M50.6 34.6L55.4 39.4M55.4 34.6L50.6 39.4" stroke="var(--red)" stroke-width="1.3" stroke-linecap="round"/>';
+    h += '<circle cx="37" cy="53" r="2.5" stroke="var(--blue)" stroke-width="1.1" fill="none"/>';
+    // A couple of single cells.
+    h += '<path d="M41.8 41.8L42.9 42.9M42.9 41.8L41.8 42.9" stroke="var(--red)" stroke-width="0.6" stroke-linecap="round"/>';
+    h += '<circle cx="45.67" cy="45.67" r="0.75" stroke="var(--blue)" stroke-width="0.5" fill="none"/>';
     svg.innerHTML = h;
   })();
 
