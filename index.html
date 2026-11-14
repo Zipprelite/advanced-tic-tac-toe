@@ -1131,7 +1131,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       if (!t || !s) return;
       const css = getComputedStyle(document.documentElement);
       const col = name => new t.T.Color(css.getPropertyValue(name).trim() || "#888");
-      const red = col("--red"), blue = col("--blue"), muted = col("--muted"), turn = s.turn === 1 ? red : blue;
+      const red = col("--red"), blue = col("--blue"), muted = col("--muted"), cellCol = col("--cell"), turn = s.turn === 1 ? red : blue;
       const inLine = new Set();
       for (const [li] of s.lines) for (const c of CUBE_LINES[li]) inLine.add(c);
       for (let i = 0; i < 27; i++) {
@@ -1139,19 +1139,20 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         mat.emissive.setRGB(0, 0, 0); mat.emissiveIntensity = 1;
         if (v === 1 || v === 2) {
           const c = v === 1 ? red : blue;
-          mat.color.copy(c); mat.opacity = 1; mat.depthWrite = true;
+          mat.color.copy(c); mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
           out.color.copy(c); out.opacity = 0.9;
           if (inLine.has(i)) mat.emissive.copy(c).multiplyScalar(0.25);
           if (i === s.last) mat.emissive.copy(c).multiplyScalar(0.45);
           mesh.scale.setScalar(1);
         } else if (v === 3) {
-          mat.color.copy(muted); mat.opacity = 0.55; mat.depthWrite = true;
+          mat.color.copy(muted); mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
           out.color.copy(muted); out.opacity = 0.6;
           mesh.scale.setScalar(0.5);
         } else {
           const hov = i === this.hover;
-          mat.color.copy(hov ? turn : muted); mat.opacity = hov ? 0.7 : 0.3; mat.depthWrite = false;
-          out.color.copy(hov ? turn : muted); out.opacity = hov ? 1 : 0.75;
+          // Empty cubes are solid, in the board's cell colour.
+          mat.color.copy(hov ? turn : cellCol); mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
+          out.color.copy(hov ? turn : muted); out.opacity = hov ? 1 : 0.6;
           mesh.scale.setScalar(hov ? 1.05 : 1);
         }
         mat.needsUpdate = true;
