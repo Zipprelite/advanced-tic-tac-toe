@@ -357,11 +357,6 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
         <h1 id="gameTitle">Ultimate</h1>
       </div>
       <div class="topbar-right">
-        <div class="score" aria-label="Score">
-          <span class="sr">Red<b id="sc1">0</b></span>
-          <span class="sb">Blue<b id="sc2">0</b></span>
-          <span class="sd">Draws<b id="sc3">0</b></span>
-        </div>
         <button type="button" class="btn back" id="restartBtn" hidden>New game</button>
         <button type="button" class="btn back" id="undoBtn">Undo</button>
       </div>
@@ -728,10 +723,6 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       sub.textContent = thinking ? "" : G.hint(s, history.length);
     }
 
-    const sc = score[gameKey];
-    if (s.winner && !counted) { sc[s.winner]++; counted = true; save(); }
-    $("sc1").textContent = sc[1]; $("sc2").textContent = sc[2]; $("sc3").textContent = sc[3];
-
     $("undoBtn").disabled = thinking || !canUndo();
     $("restartBtn").hidden = settings.opp !== "2p";
   }
@@ -905,7 +896,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   });
   $("undoBtn").addEventListener("click", () => {
     if (thinking || !canUndo()) return;
-    if (state.winner && counted) { const sc = score[gameKey]; sc[state.winner] = Math.max(0, sc[state.winner] - 1); counted = false; save(); }
+
     if (settings.opp === "ai") {
       let prev;
       do { prev = history.pop(); } while (history.length && prev.turn !== settings.side);
