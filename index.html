@@ -1003,12 +1003,8 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     if (G === Supreme) {
       clearTimeout(zoomTimer);
       if (s.winner) setZoom(-1, true);
-      else if (popMove !== undefined) {
-        // Show the whole board for a moment so everyone sees where play goes.
-        peek = false;
-        setZoom(-1);
-        zoomTimer = setTimeout(autoZoom, 900);
-      } else autoZoom();
+      else if (popMove !== undefined) { picking = false; setZoom(-1); }   // zoom out after every move
+      else autoZoom();
     }
     drawWinLine(popMove !== undefined);
 
@@ -1154,7 +1150,9 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   }
 
   // ---------- Supreme phone zoom ----------
-  let zoomGame = -1, zoomTimer = null, peek = false;
+  // On small screens the Zoom in button scales the board up around one
+  // Ultimate game. It never zooms in by itself, and zooms out after each move.
+  let zoomGame = -1, zoomTimer = null, picking = false;
   const zoomable = () => G === Supreme && board.offsetWidth > 0 && board.offsetWidth < 640;
   const humanTurn = () => !state.winner && !thinking && !isComputerTurn() && !(online && (state.turn !== online.side || online.left));
   const canPick = g => state.game < 0 ? !state.games[g] : state.game === g;
@@ -1170,15 +1168,16 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       board.style.transform = `translate(${m - k * ge.offsetLeft}px, ${m - k * ge.offsetTop}px) scale(${k})`;
     }
     if (instant) { void board.offsetWidth; board.classList.remove("notrans"); }
-    board.classList.toggle("overview", on && g < 0);
+    if (g >= 0 || !on) picking = false;
+    board.classList.toggle("overview", on && picking);
     updateZoomBar();
   }
 
+  // Keep the current view unless it no longer makes sense.
   function autoZoom() {
-    if (!zoomable()) return setZoom(-1);
-    if (state.winner || !humanTurn()) return setZoom(-1);
-    if (state.game >= 0 && !peek) return setZoom(state.game);
-    if (zoomGame >= 0 && !canPick(zoomGame)) return setZoom(-1);
+    if (!zoomable() || state.winner) { picking = false; return setZoom(-1); }
+    if (!humanTurn()) picking = false;
+    if (zoomGame >= 0 && (!humanTurn() || !canPick(zoomGame))) return setZoom(-1);
     setZoom(zoomGame);
   }
 
@@ -1187,20 +1186,19 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     const on = G === Supreme && zoomable() && !state.winner;
     bar.hidden = !on;
     if (!on) return;
-    for (let g = 0; g < 9; g++) Supreme.gameEls[g].classList.toggle("pickable", zoomGame < 0 && humanTurn() && canPick(g));
+    for (let g = 0; g < 9; g++) Supreme.gameEls[g].classList.toggle("pickable", picking && canPick(g));
     btn.hidden = false;
-    if (zoomGame >= 0) {
-      text.textContent = "Zoomed in on the " + POS[zoomGame] + " game.";
-      btn.textContent = "Show whole board";
-    } else if (humanTurn()) {
-      if (state.game < 0) { text.textContent = "Tap a game to zoom in."; btn.hidden = true; }
-      else { text.textContent = "Showing the whole board."; btn.textContent = "Zoom in"; }
-    } else { text.textContent = "Showing the whole board."; btn.hidden = true; }
+    if (zoomGame >= 0) { text.textContent = "Zoomed in on the " + POS[zoomGame] + " game."; btn.textContent = "Show whole board"; }
+    else if (picking) { text.textContent = "Tap a game to zoom in."; btn.textContent = "Cancel"; }
+    else if (humanTurn()) { text.textContent = ""; btn.textContent = "Zoom in"; }
+    else { text.textContent = ""; btn.hidden = true; }
   }
 
   $("zoomBtn").addEventListener("click", () => {
-    if (zoomGame >= 0) { peek = true; setZoom(-1); }
-    else if (state.game >= 0) { peek = false; setZoom(state.game); }
+    if (zoomGame >= 0) setZoom(-1);
+    else if (picking) { picking = false; setZoom(-1); }
+    else if (state.game >= 0) setZoom(state.game);
+    else { picking = true; setZoom(-1); }
   });
 
   function showScreen(id) {
@@ -1253,7 +1251,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     endOv.remove();
     board.innerHTML = "";
     board.style.transform = "";
-    zoomGame = -1; peek = false;
+    zoomGame = -1; picking = false;
     G.build(board);
     board.appendChild(endOv);
     $("boardWrap").classList.toggle("sup", G === Supreme);
@@ -1531,12 +1529,12 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
   $("rulesPlay").addEventListener("click", () => pickGame(rulesKey));
   $("endMenu").addEventListener("click", showMenu);
   board.addEventListener("click", e => {
-    // On a phone, tapping a game on the whole-board view zooms into it.
-    if (G === Supreme && zoomable() && zoomGame < 0) {
+    // After pressing Zoom in (when play can go anywhere), tap a game to zoom into it.
+    if (G === Supreme && picking) {
       const ge = e.target.closest(".ugame");
       if (!ge || !humanTurn()) return;
       const g = Supreme.gameEls.indexOf(ge);
-      if (canPick(g)) { peek = false; setZoom(g); }
+      if (canPick(g)) setZoom(g);
       return;
     }
     const btn = e.target.closest(".cell");
