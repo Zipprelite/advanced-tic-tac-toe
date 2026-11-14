@@ -679,13 +679,13 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   // ================= Supreme (9 Ultimate games) =================
   // Cell index = game * 81 + board * 9 + cell.
-  // Inside an Ultimate game you play by Ultimate rules. Winning a small board
+  // The first move can go anywhere. Inside an Ultimate game you play by Ultimate rules. Winning a small board
   // sends play to the Ultimate game in the same position (anywhere in it).
   // If that game is finished, the next player can play anywhere.
   const Supreme = {
     title: "Supreme",
     rules: [
-      "<b>Nine Ultimate games in one.</b> Play starts in the center Ultimate game.",
+      "<b>Nine Ultimate games in one.</b> Red goes first and can start in any Ultimate game.",
       "<b>Play by Ultimate rules</b> inside the game you're in. The cell you pick decides which small board your opponent plays in next.",
       "<b>Win a small board and play jumps.</b> Win the top-left small board, and your opponent plays next in the top-left Ultimate game, in any open small board.",
       "<b>Jumped to a finished game?</b> Your opponent can play anywhere on the whole board.",
@@ -693,7 +693,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     ],
     newState: () => ({
       cells: new Uint8Array(729), small: new Uint8Array(81), games: new Uint8Array(9),
-      game: 4, board: -1, jump: -1, turn: 1, winner: 0, last: -1, line: null
+      game: -1, board: -1, jump: -1, turn: 1, winner: 0, last: -1, line: null
     }),
     clone: s => ({
       cells: s.cells.slice(), small: s.small.slice(), games: s.games.slice(),
@@ -775,7 +775,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       const where = s.game < 0 ? "Play anywhere open."
         : s.board >= 0 ? "Play in the " + POS[s.board] + " board of the " + POS[s.game] + " game."
         : "Play in any open board of the " + POS[s.game] + " game.";
-      if (!n) return "Red goes first. Play anywhere in the center game.";
+      if (!n) return "Red goes first. Play anywhere on the board.";
       if (s.jump >= 0) return s.game < 0 ? "Board won! That game is finished, so play anywhere." : "Board won! Play jumps to the " + POS[s.jump] + " game.";
       return where;
     },
