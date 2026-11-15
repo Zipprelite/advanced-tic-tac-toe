@@ -193,6 +193,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 /* 3D Cube (experimental) */
 .cube3d { position: relative; width: 100%; max-width: 560px; aspect-ratio: 1; margin: 0 auto; background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); }
 .cube-stage { position: absolute; inset: 0; }
+button, .cell { touch-action: manipulation; }
 .cube-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: 20px; }
 .cube-floor { position: absolute; inset: 0; padding: clamp(8px, 2vw, 14px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(6px, 1.8vw, 12px); }
 .cube-floor .cell { border-radius: 14px; }
@@ -1314,8 +1315,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     G.render(board, s, moves, locked, popMove);
     if (G === Supreme) {
       clearTimeout(zoomTimer);
-      if (s.winner) setZoom(-1, true);
-      else if (popMove !== undefined) { picking = false; setZoom(-1); }   // zoom out after every move
+      if (s.winner) setZoom(-1, true);   // show the whole board when the game ends
       else autoZoom();
     }
     drawWinLine(popMove !== undefined);
@@ -1361,7 +1361,6 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     }
 
     $("undoBtn").disabled = thinking || !canUndo();
-    $("undoBtn").hidden = !!online;
     $("restartBtn").hidden = !!online || settings.opp !== "2p";
     const vs = $("vsLine");
     vs.hidden = !online;
@@ -1426,6 +1425,8 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   function canUndo() {
     if (!history.length) return false;
+    // Online: only the player whose turn it is can undo the other player's last move.
+    if (online) return !online.left && !state.winner && state.turn === online.side;
     if (settings.opp !== "ai") return true;
     return history.some(h => h.turn === settings.side);
   }
@@ -1463,7 +1464,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 
   // ---------- Supreme phone zoom ----------
   // On small screens the Zoom in button scales the board up around one
-  // Ultimate game. It never zooms in by itself, and zooms out after each move.
+  // Ultimate game. It never zooms in or out by itself (except at the end).
   let zoomGame = -1, zoomTimer = null, picking = false;
   const zoomable = () => G === Supreme && board.offsetWidth > 0 && board.offsetWidth < 640;
   const humanTurn = () => !state.winner && !thinking && !isComputerTurn() && !(online && (state.turn !== online.side || online.left));
@@ -1485,11 +1486,10 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     updateZoomBar();
   }
 
-  // Keep the current view unless it no longer makes sense.
+  // Keep the current view. Only the button changes the zoom.
   function autoZoom() {
     if (!zoomable() || state.winner) { picking = false; return setZoom(-1); }
     if (!humanTurn()) picking = false;
-    if (zoomGame >= 0 && (!humanTurn() || !canPick(zoomGame))) return setZoom(-1);
     setZoom(zoomGame);
   }
 
@@ -1500,7 +1500,11 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     if (!on) return;
     for (let g = 0; g < 9; g++) Supreme.gameEls[g].classList.toggle("pickable", picking && canPick(g));
     btn.hidden = false;
-    if (zoomGame >= 0) { text.textContent = "Zoomed in on the " + POS[zoomGame] + " game."; btn.textContent = "Show whole board"; }
+    if (zoomGame >= 0) {
+      text.textContent = "Zoomed in on the " + POS[zoomGame] + " game." +
+        (humanTurn() && !canPick(zoomGame) ? " Your move is in the " + POS[state.game] + " game." : "");
+      btn.textContent = "Show whole board";
+    }
     else if (picking) { text.textContent = "Tap a game to zoom in."; btn.textContent = "Cancel"; }
     else if (humanTurn()) { text.textContent = ""; btn.textContent = "Zoom in"; }
     else { text.textContent = ""; btn.hidden = true; }
@@ -1792,6 +1796,11 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
       if (state.winner || state.turn === online.side) return;
       if (!G.legal(state).includes(m)) return;
       play(m, true);
+    } else if (d.t === "undo") {
+      // The other player took back my last move: it's my turn again.
+      if (state.winner || state.turn === online.side || d.n !== history.length) return;
+      state = history.pop();
+      render();
     } else if (d.t === "rematch") {
       online.theirReq = true;
       checkRematch();
@@ -1857,7 +1866,13 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
     play(+btn.dataset.m);
   });
   $("undoBtn").addEventListener("click", () => {
-    if (online || thinking || !canUndo()) return;
+    if (thinking || !canUndo()) return;
+    if (online) {
+      send({ t: "undo", n: history.length });
+      state = history.pop();
+      render();
+      return;
+    }
 
     if (settings.opp === "ai") {
       let prev;
