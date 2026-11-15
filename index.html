@@ -298,6 +298,8 @@ button, .cell { touch-action: manipulation; }
 .who b { color: var(--ink); }
 .linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--blue); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .linkbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
+.extras-list { display: flex; flex-direction: column; gap: 22px; }
+.vs .extras { display: block; font-size: 13px; font-weight: 600; margin-top: 4px; }
 .queue-card { align-items: center; text-align: center; }
 .spinner { width: 46px; height: 46px; border-radius: 50%; border: 5px solid var(--cell); border-top-color: var(--red); border-right-color: var(--blue); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -453,6 +455,20 @@ button, .cell { touch-action: manipulation; }
   </section>
 
   <!-- ===== Online queue ===== -->
+  <section class="setup" id="extrasScreen" hidden>
+    <div>
+      <span class="label">Online · Match found</span>
+      <h1>Extra rules</h1>
+      <p class="lede" id="extrasLede">Pick the extra rules you want. A rule is only used if both players turn it on.</p>
+    </div>
+    <div class="setup-card">
+      <div id="extrasList" class="extras-list"></div>
+      <p class="note" id="extrasStatus"></p>
+      <button type="button" class="btn primary start" id="extrasReady">Ready</button>
+      <button type="button" class="btn" id="extrasLeave">Leave match</button>
+    </div>
+  </section>
+
   <section class="setup" id="queueScreen" hidden>
     <div>
       <span class="label">Online</span>
@@ -729,15 +745,16 @@ button, .cell { touch-action: manipulation; }
       "<b>Play by Ultimate rules</b> inside the game you're in. The cell you pick decides which small board your opponent plays in next.",
       "<b>Win a small board and play jumps.</b> Win the top-left small board, and your opponent plays next in the top-left Ultimate game, in any open small board.",
       "<b>Jumped to a finished game?</b> Your opponent can play anywhere on the whole board.",
-      "<b>Win an Ultimate game</b> with three small boards in a row. <b>Win Supreme</b> with three Ultimate games in a row."
+      "<b>Win an Ultimate game</b> with three small boards in a row. <b>Win Supreme</b> with three Ultimate games in a row.",
+      "<b>Extra rule (online): Precise jumps.</b> When play jumps, the cell you won the small board with also picks the small board. Win the top-left board with a middle cell, and your opponent must play in the middle board of the top-left game. If that board is finished, they can play in any open board of that game."
     ],
     newState: () => ({
       cells: new Uint8Array(729), small: new Uint8Array(81), games: new Uint8Array(9),
-      game: -1, board: -1, jump: -1, turn: 1, winner: 0, last: -1, line: null
+      game: -1, board: -1, jump: -1, turn: 1, winner: 0, last: -1, line: null, opts: {}
     }),
     clone: s => ({
       cells: s.cells.slice(), small: s.small.slice(), games: s.games.slice(),
-      game: s.game, board: s.board, jump: s.jump, turn: s.turn, winner: s.winner, last: s.last, line: s.line
+      game: s.game, board: s.board, jump: s.jump, turn: s.turn, winner: s.winner, last: s.last, line: s.line, opts: s.opts
     }),
     legal(s) {
       const out = [];
@@ -785,7 +802,8 @@ button, .cell { touch-action: manipulation; }
       if (wonSmall) {
         s.jump = b;
         if (s.games[b]) { s.game = -1; s.board = -1; }
-        else { s.game = b; s.board = -1; }
+        // Precise jumps: the winning cell also picks the small board.
+        else { s.game = b; s.board = s.opts.precise && !s.small[b * 9 + c] ? c : -1; }
       } else {
         s.jump = -1;
         if (s.games[g]) { s.game = -1; s.board = -1; }
@@ -816,7 +834,7 @@ button, .cell { touch-action: manipulation; }
         : s.board >= 0 ? "Play in the " + POS[s.board] + " board of the " + POS[s.game] + " game."
         : "Play in any open board of the " + POS[s.game] + " game.";
       if (!n) return "Red goes first. Play anywhere on the board.";
-      if (s.jump >= 0) return s.game < 0 ? "Board won! That game is finished, so play anywhere." : "Board won! Play jumps to the " + POS[s.jump] + " game.";
+      if (s.jump >= 0) return s.game < 0 ? "Board won! That game is finished, so play anywhere." : "Board won! Play jumps to the " + (s.board >= 0 ? POS[s.board] + " board of the " : "") + POS[s.jump] + " game.";
       return where;
     },
     drawText: "No one can line up three Ultimate games.",
@@ -1305,6 +1323,7 @@ button, .cell { touch-action: manipulation; }
   })();
 
   function render(popMove) {
+    if (online && !online.started) return updateExtras();
     const s = state;
     const moves = new Set(G.legal(s));
     const leftMid = !!online && online.left && !s.winner;
@@ -1370,6 +1389,12 @@ button, .cell { touch-action: manipulation; }
       me.className = online.side === 1 ? "r" : "b"; me.textContent = "You (" + NAME[online.side] + ")";
       them.className = online.side === 1 ? "b" : "r"; them.textContent = online.oppName + " (" + NAME[3 - online.side] + ")";
       vs.append(me, " vs ", them);
+      if (EXTRAS[gameKey]) {
+        const ex = document.createElement("span"), on = extrasOn();
+        ex.className = "extras";
+        ex.textContent = on.length ? "Extra rules: " + on.join(", ") : "No extra rules";
+        vs.appendChild(ex);
+      }
     }
   }
 
@@ -1457,6 +1482,7 @@ button, .cell { touch-action: manipulation; }
     gameId++;
     thinking = false; counted = false;
     state = G.newState();
+    if (online && G === Supreme) state.opts = online.opts;
     history = [];
     render();
     maybeComputer();
@@ -1520,7 +1546,7 @@ button, .cell { touch-action: manipulation; }
   function showScreen(id) {
     gameId++; thinking = false;
     clearTimeout(zoomTimer);
-    for (const s of ["nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "play"]) $(s).hidden = s !== id;
+    for (const s of ["nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -1776,7 +1802,7 @@ button, .cell { touch-action: manipulation; }
   }
 
   function beginMatch(n, oppId, side, oppName) {
-    online = { oppId, side, oppName, myReq: false, theirReq: false, left: false };
+    online = { oppId, side, oppName, myReq: false, theirReq: false, left: false, myOpts: null, theirOpts: null, opts: {}, started: false };
     n.lastSeen = Date.now();
     // Check every few seconds that the other player is still there.
     const ping = () => {
@@ -1786,8 +1812,77 @@ button, .cell { touch-action: manipulation; }
       later(n, ping, 5000);
     };
     later(n, ping, 5000);
+    if (EXTRAS[gameKey]) openExtras();
+    else { online.started = true; startGame(); }
+  }
+
+  // ---------- Extra rules (agreed before an online match) ----------
+  const EXTRAS = {
+    supreme: [
+      { key: "precise", name: "Precise jumps",
+        desc: "When you win a small board, the cell you won it with also picks the small board your opponent plays in. Win the top-left board with a middle cell, and they play in the middle board of the top-left game." }
+    ]
+  };
+  let extraPrefs = {};
+  try { extraPrefs = JSON.parse(localStorage.getItem("att-extras")) || {}; } catch (e) {}
+  const extrasOn = () => Object.keys(online.opts).filter(k => online.opts[k]).map(k => EXTRAS[gameKey].find(x => x.key === k).name);
+
+  function openExtras() {
+    const list = $("extrasList");
+    list.innerHTML = "";
+    for (const x of EXTRAS[gameKey]) {
+      const g = document.createElement("div");
+      g.className = "group";
+      g.innerHTML = '<span class="label"></span><div class="seg" role="group"><button type="button" data-v="0">Off</button><button type="button" data-v="1">On</button></div><p class="note"></p>';
+      g.querySelector(".label").textContent = x.name;
+      g.querySelector(".note").textContent = x.desc;
+      for (const b of g.querySelectorAll("button")) b.addEventListener("click", () => {
+        if (online && online.myOpts) return;
+        extraPrefs[x.key] = b.dataset.v === "1";
+        try { localStorage.setItem("att-extras", JSON.stringify(extraPrefs)); } catch (e) {}
+        updateExtras();
+      });
+      g.dataset.key = x.key;
+      list.appendChild(g);
+    }
+    showScreen("extrasScreen");
+    updateExtras();
+  }
+
+  function updateExtras() {
+    if (!online) return;
+    const mine = online.myOpts;
+    for (const g of $("extrasList").children) {
+      const on = !!(mine || extraPrefs)[g.dataset.key];
+      for (const b of g.querySelectorAll("button")) {
+        b.setAttribute("aria-pressed", String((b.dataset.v === "1") === on));
+        b.disabled = !!mine || online.left;
+      }
+    }
+    const st = $("extrasStatus"), ready = $("extrasReady");
+    ready.hidden = !!mine || online.left;
+    if (online.left) st.textContent = online.oppName + " left the match.";
+    else if (mine) st.textContent = "Waiting for " + online.oppName + " to get ready…";
+    else st.textContent = online.theirOpts ? online.oppName + " is ready." : "Playing against " + online.oppName + ".";
+  }
+
+  function checkExtras() {
+    if (!online || online.started || !online.myOpts || !online.theirOpts) return updateExtras();
+    online.opts = {};
+    for (const x of EXTRAS[gameKey]) online.opts[x.key] = !!online.myOpts[x.key] && !!online.theirOpts[x.key];
+    online.started = true;
     startGame();
   }
+
+  $("extrasReady").addEventListener("click", () => {
+    if (!online || online.myOpts || online.left) return;
+    const mine = {};
+    for (const x of EXTRAS[gameKey]) mine[x.key] = !!extraPrefs[x.key];
+    online.myOpts = mine;
+    send({ t: "opts", opts: mine });
+    checkExtras();
+  });
+  $("extrasLeave").addEventListener("click", showMenu);
 
   function onGameData(d) {
     if (!online) return;
@@ -1796,6 +1891,11 @@ button, .cell { touch-action: manipulation; }
       if (state.winner || state.turn === online.side) return;
       if (!G.legal(state).includes(m)) return;
       play(m, true);
+    } else if (d.t === "opts") {
+      if (online.started || online.theirOpts || !d.opts || typeof d.opts !== "object") return;
+      online.theirOpts = {};
+      for (const x of EXTRAS[gameKey] || []) online.theirOpts[x.key] = d.opts[x.key] === true;
+      checkExtras();
     } else if (d.t === "undo") {
       // The other player took back my last move: it's my turn again.
       if (state.winner || state.turn === online.side || d.n !== history.length) return;
