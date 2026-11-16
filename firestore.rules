@@ -80,5 +80,71 @@ service cloud.firestore {
           && request.resource.data.ts == request.time;
       }
     }
+
+    // Anytime games: moves are saved here so players can take their turns whenever they like.
+    match /games/{code} {
+      function player() { return request.auth.uid == resource.data.red || request.auth.uid == resource.data.blue; }
+      function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+      function playing() { return resource.data.blue != '' && resource.data.done == false && resource.data.resigned == 0; }
+      // The player whose turn it is adds one move, or takes back the other player's last move.
+      function moveOk() {
+        let before = resource.data.moves;
+        let after = request.resource.data.moves;
+        let k = before.size();
+        let mover = k % 2 == 0 ? resource.data.red : resource.data.blue;
+        return only(['moves', 'done', 'updated']) && playing()
+          && request.auth.uid == mover
+          && request.resource.data.done is bool
+          && request.resource.data.updated == request.time
+          && ((after.size() == k + 1 && after[k] is int && before.concat([after[k]]) == after)
+            || (k > 0 && request.resource.data.done == false && after.size() == k - 1
+              && after.concat([before[k - 1]]) == before));
+      }
+      function joinOk() {
+        return only(['blue', 'blueName', 'players', 'updated'])
+          && resource.data.blue == ''
+          && request.auth.uid != resource.data.red
+          && request.resource.data.blue == request.auth.uid
+          && request.resource.data.players == [resource.data.red, request.auth.uid]
+          && realName(request.resource.data.blueName)
+          && request.resource.data.updated == request.time;
+      }
+      function resignOk() {
+        return only(['resigned', 'done', 'updated']) && playing() && player()
+          && request.resource.data.resigned == (request.auth.uid == resource.data.red ? 1 : 2)
+          && request.resource.data.done == true
+          && request.resource.data.updated == request.time;
+      }
+      allow get: if signedIn();
+      allow list: if signedIn() && request.auth.uid in resource.data.players;
+      // Only accounts can start a game; guests can join one.
+      allow create: if signedIn() && !isGuest() && code.matches('[A-Z2-9]{5}')
+        && request.resource.data.keys().hasOnly(['game', 'opts', 'red', 'blue', 'redName', 'blueName', 'players', 'moves', 'done', 'resigned', 'updated'])
+        && request.resource.data.game in ['normal', 'ultimate', 'supreme', 'mega']
+        && request.resource.data.red == request.auth.uid
+        && request.resource.data.blue == '' && request.resource.data.blueName == ''
+        && request.resource.data.players == [request.auth.uid]
+        && request.resource.data.moves == []
+        && request.resource.data.done == false && request.resource.data.resigned == 0
+        && realName(request.resource.data.redName)
+        && request.resource.data.updated == request.time;
+      allow update: if signedIn() && (moveOk() || joinOk() || resignOk());
+      // A player can cancel a game nobody has joined, or remove a finished one.
+      allow delete: if signedIn() && player() && (resource.data.blue == '' || resource.data.done == true);
+
+      match /chat/{id} {
+        function g() { return get(/databases/$(database)/documents/games/$(code)).data; }
+        allow read: if signedIn() && (request.auth.uid == g().red || request.auth.uid == g().blue);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'ts'])
+          && request.resource.data.uid == request.auth.uid
+          && ((request.auth.uid == g().red && request.resource.data.name == g().redName)
+            || (request.auth.uid == g().blue && request.resource.data.name == g().blueName))
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 300
+          && request.resource.data.ts == request.time;
+      }
+    }
   }
 }

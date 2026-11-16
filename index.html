@@ -63,11 +63,12 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .b { color: var(--blue); }
 
 /* ---------- Menu ---------- */
-.menu { max-width: 860px; margin: 0 auto; padding-top: clamp(8px, 4vw, 40px); }
+.menu { max-width: 1080px; margin: 0 auto; padding-top: clamp(8px, 4vw, 40px); }
 .menu h1 { font-weight: 800; font-size: clamp(34px, 7vw, 60px); letter-spacing: -0.025em; line-height: 1; }
 .menu .lede { color: var(--muted); font-size: 17px; margin: 12px 0 28px; max-width: 52ch; }
-.modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-@media (max-width: 720px) { .modes { grid-template-columns: minmax(0, 1fr); } }
+.modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 980px) { .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .modes { grid-template-columns: minmax(0, 1fr); } }
 .mode {
   appearance: none; text-align: left; font: inherit; color: inherit; cursor: pointer;
   background: var(--surface); border: 2px solid var(--line); border-radius: 18px;
@@ -193,6 +194,28 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .supreme.notrans { transition: none; }
 .supreme.overview .cell { pointer-events: none; }
 .supreme.overview .ugame.pickable { cursor: pointer; }
+/* Mega: a map of the nine Supreme games above the board */
+.meganav { display: flex; align-items: center; justify-content: center; gap: 14px; margin: -4px 0 12px; }
+.meganav p { margin: 0; color: var(--muted); font-size: 14px; font-weight: 600; max-width: 30ch; }
+.mnav { display: grid; grid-template-columns: repeat(3, 34px); gap: 4px; padding: 5px; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); flex: none; }
+.mtile { appearance: none; position: relative; width: 34px; height: 34px; padding: 3px; border: 0; border-radius: 6px; cursor: pointer;
+  background: var(--cell); display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 1px; outline: 2px solid transparent; outline-offset: -2px; }
+.mtile i { border-radius: 2px; background: var(--line); opacity: 0.6; }
+.mtile i.u1 { background: var(--red); opacity: 1; }
+.mtile i.u2 { background: var(--blue); opacity: 1; }
+.mtile i.u3 { background: var(--muted); opacity: 0.6; }
+.mtile .big { position: absolute; inset: 3px; display: none; color: var(--ink); }
+.mtile.won-1 .big, .mtile.won-2 .big { display: block; }
+.mtile.won-1 .big { color: var(--red); }
+.mtile.won-2 .big { color: var(--blue); }
+.mtile.done i { opacity: 0.25; }
+.mtile .big svg { width: 100%; height: 100%; }
+.mtile.active { background: var(--turn-soft); }
+.mtile.here { outline-color: var(--ink); }
+.mtile.active.here { outline-color: var(--turn); }
+.mtile.won-1.winline { box-shadow: 0 0 0 2px var(--red); }
+.mtile.won-2.winline { box-shadow: 0 0 0 2px var(--blue); }
+.mtile:focus-visible { outline-color: var(--blue); }
 /* 3D Cube (experimental) */
 .cube3d { position: relative; width: 100%; max-width: 560px; aspect-ratio: 1; margin: 0 auto; background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); }
 .cube-stage { position: absolute; inset: 0; }
@@ -308,6 +331,13 @@ button, .cell { touch-action: manipulation; }
 .party-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .party-menu .setup-card { gap: 14px; }
 .party-menu .err { grid-column: 1 / -1; }
+.party-menu .wide-card { grid-column: 1 / -1; }
+.agames li { justify-content: space-between; }
+.agames .ainfo { min-width: 0; font-size: 15px; line-height: 1.4; }
+.agames .ast { color: var(--muted); font-size: 13px; font-weight: 600; }
+.agames li.k1 .ast { color: var(--turn); }
+.agames .abtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.agames .btn { padding: 6px 12px; font-size: 13px; }
 @media (max-width: 640px) { .party-menu { grid-template-columns: 1fr; } }
 .party-guest { gap: 12px; max-width: 520px; }
 .code-in { text-transform: uppercase; letter-spacing: 0.25em; font-weight: 700; text-align: center; font-size: 20px; }
@@ -445,6 +475,7 @@ button, .cell { touch-action: manipulation; }
         <button type="button" id="where-local" data-where="local">This device</button>
         <button type="button" id="where-online" data-where="online">Online</button>
         <button type="button" id="where-party" data-where="party">Party</button>
+        <button type="button" id="where-async" data-where="async">Anytime</button>
       </div>
       <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button></p>
     </div>
@@ -465,6 +496,42 @@ button, .cell { touch-action: manipulation; }
         <button type="submit" class="btn start" id="partyJoin">Join party</button>
       </form>
       <p class="note err" id="partyMenuErr" role="alert"></p>
+    </div>
+    <div class="party-menu" id="asyncMenu" hidden>
+      <div class="setup-card wide-card">
+        <span class="label">Your games</span>
+        <ul class="members agames" id="asyncList"></ul>
+        <p class="note" id="asyncEmpty"></p>
+      </div>
+      <div class="setup-card" id="asyncGuest" hidden>
+        <span class="label">Start a game</span>
+        <p class="note">Guests can join a game with a code. To start your own, you need an account.</p>
+        <button type="button" class="btn start" id="asyncLogin">Log in or create an account</button>
+      </div>
+      <div class="setup-card" id="asyncCreateCard">
+        <span class="label">Start a game</span>
+        <p class="note">You play Red. Send the code to a friend. Take your turns whenever you like, and come back later.</p>
+        <div class="seg" id="asyncGames" role="group" aria-label="Game">
+          <button type="button" data-agame="normal">Normal</button>
+          <button type="button" data-agame="ultimate">Ultimate</button>
+          <button type="button" data-agame="supreme">Supreme</button>
+          <button type="button" data-agame="mega">Mega</button>
+        </div>
+        <div class="group" id="asyncPrecise" hidden>
+          <span class="label">Precise jumps</span>
+          <div class="seg" role="group" aria-label="Precise jumps">
+            <button type="button" data-aprecise="0">Off</button>
+            <button type="button" data-aprecise="1">On</button>
+          </div>
+        </div>
+        <button type="button" class="btn primary start" id="asyncCreate">Create game</button>
+      </div>
+      <form class="setup-card" id="asyncJoinForm" novalidate>
+        <label class="label" for="asyncCodeIn">Join a game</label>
+        <input type="text" class="text-in code-in" id="asyncCodeIn" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE">
+        <button type="submit" class="btn start" id="asyncJoin">Join game</button>
+      </form>
+      <p class="note err" id="asyncErr" role="alert"></p>
     </div>
     <div class="modes">
       <div class="mode-col">
@@ -505,6 +572,17 @@ button, .cell { touch-action: manipulation; }
         <p>Nine Ultimate games in one. Win a small board to send play to another game.</p>
       </button>
       <button type="button" class="btn rules-btn" id="rules-supreme" data-rules="supreme">Rules</button>
+      </div>
+      <div class="mode-col">
+      <button type="button" class="mode" id="pick-mega" data-game="mega">
+        <div class="art" aria-hidden="true">
+          <svg viewBox="0 0 90 90" id="megaArt"></svg>
+        </div>
+        <span class="meta">729 boards · 6,561 cells</span>
+        <h2>Mega</h2>
+        <p>Nine Supreme games in one. Win an Ultimate game to jump to another Supreme game.</p>
+      </button>
+      <button type="button" class="btn rules-btn" id="rules-mega" data-rules="mega">Rules</button>
       </div>
     </div>
     <div class="labs">
@@ -609,6 +687,7 @@ button, .cell { touch-action: manipulation; }
               <button type="button" data-pgame="normal">Normal</button>
               <button type="button" data-pgame="ultimate">Ultimate</button>
               <button type="button" data-pgame="supreme">Supreme</button>
+              <button type="button" data-pgame="mega">Mega</button>
               <button type="button" data-pgame="cube">3D Cube</button>
             </div>
           </div>
@@ -667,6 +746,7 @@ button, .cell { touch-action: manipulation; }
       </div>
       <div class="topbar-right">
         <button type="button" class="btn back" id="restartBtn" hidden>New game</button>
+        <button type="button" class="btn back" id="resignBtn" hidden>Resign</button>
         <button type="button" class="btn back" id="undoBtn">Undo</button>
       </div>
     </div>
@@ -687,6 +767,10 @@ button, .cell { touch-action: manipulation; }
           <button type="button" class="btn back" id="zoomBtn">Show whole board</button>
         </div>
         <div class="floorbar" id="floorBar" hidden></div>
+        <div class="meganav" id="megaNavWrap" hidden>
+          <div class="mnav" id="megaNav" role="group" aria-label="Map of the nine Supreme games"></div>
+          <p id="megaNavText"></p>
+        </div>
         <div class="board-wrap" id="boardWrap">
           <div id="board" role="grid" aria-label="Game board"></div>
         </div>
@@ -1086,6 +1170,229 @@ button, .cell { touch-action: manipulation; }
     }
   };
 
+  // ================= Mega (9 Supreme games) =================
+  // Cell index = sup * 729 + game * 81 + board * 9 + cell.
+  // Inside a Supreme game you play by Supreme rules. Winning a whole Ultimate game sends play
+  // to the Supreme game in the same position (anywhere in it). A finished place means one level up.
+  // The screen shows one Supreme game at a time; the map above the board picks which one.
+  const isFull = (arr, o) => { for (let i = 0; i < 9; i++) if (!arr[o + i]) return false; return true; };
+  const SUPNAME = ["top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"];
+  const Mega = {
+    title: "Mega",
+    rules: [
+      "<b>Nine Supreme games in one.</b> 6,561 cells. Red goes first and can start anywhere.",
+      "<b>Play by Supreme rules</b> inside the Supreme game you're in: the cell you pick sends your opponent to a small board, and winning a small board sends them to another Ultimate game.",
+      "<b>Win a whole Ultimate game and play jumps further.</b> Win the top-left Ultimate game, and your opponent plays next in the top-left Supreme game, anywhere in it.",
+      "<b>Sent somewhere that's finished?</b> Your opponent can play anywhere in the level above it.",
+      "<b>Win a Supreme game</b> with three Ultimate games in a row. <b>Win Mega</b> with three Supreme games in a row.",
+      "<b>The map</b> above the board shows all nine Supreme games. Tap one to look at it. The board follows play when it jumps to another Supreme game.",
+      "<b>Extra rule (online): Precise jumps.</b> When play jumps, the boards you won with also pick where your opponent goes, all the way down."
+    ],
+    newState: () => ({
+      cells: new Uint8Array(6561), small: new Uint8Array(729), ult: new Uint8Array(81), sups: new Uint8Array(9),
+      sup: -1, game: -1, board: -1, jump: 0, turn: 1, winner: 0, last: -1, line: null, opts: {}
+    }),
+    clone: s => ({
+      cells: s.cells.slice(), small: s.small.slice(), ult: s.ult.slice(), sups: s.sups.slice(),
+      sup: s.sup, game: s.game, board: s.board, jump: s.jump, turn: s.turn, winner: s.winner, last: s.last, line: s.line, opts: s.opts
+    }),
+    legal(s) {
+      const out = [];
+      if (s.winner) return out;
+      const addBoard = (S, u, b) => { const o = S * 729 + u * 81 + b * 9; for (let c = 0; c < 9; c++) if (!s.cells[o + c]) out.push(o + c); };
+      const addUlt = (S, u) => { for (let b = 0; b < 9; b++) if (!s.small[S * 81 + u * 9 + b]) addBoard(S, u, b); };
+      const addSup = S => { for (let u = 0; u < 9; u++) if (!s.ult[S * 9 + u]) addUlt(S, u); };
+      if (s.sup < 0) { for (let S = 0; S < 9; S++) if (!s.sups[S]) addSup(S); }
+      else if (s.game < 0) addSup(s.sup);
+      else if (s.board < 0) addUlt(s.sup, s.game);
+      else addBoard(s.sup, s.game, s.board);
+      return out;
+    },
+    apply(s, m) {
+      const p = s.turn, S = (m / 729) | 0, u = ((m % 729) / 81) | 0, b = ((m % 81) / 9) | 0, c = m % 9;
+      const bi = S * 81 + u * 9 + b, ui = S * 9 + u;
+      s.cells[m] = p;
+      let wonSmall = false, wonUlt = false;
+      if (wins(s.cells, bi * 9, p)) { s.small[bi] = p; wonSmall = true; }
+      else if (isFull(s.cells, bi * 9)) s.small[bi] = 3;
+      if (s.small[bi]) {
+        if (wonSmall && wins(s.small, ui * 9, p)) { s.ult[ui] = p; wonUlt = true; }
+        else if (isFull(s.small, ui * 9)) s.ult[ui] = 3;
+        if (s.ult[ui]) {
+          if (wonUlt && wins(s.ult, S * 9, p)) s.sups[S] = p;
+          else if (isFull(s.ult, S * 9)) s.sups[S] = 3;
+          if (s.sups[S]) {
+            const l = s.sups[S] === p ? wins(s.sups, 0, p) : null;
+            if (l) { s.winner = p; s.line = l; }
+            else if (isFull(s.sups, 0)) s.winner = 3;
+          }
+        }
+      }
+      // Where does the next player go? Aim somewhere, then move up a level while that place is finished.
+      let to;
+      if (wonUlt) { to = [u, s.opts.precise ? b : -1, s.opts.precise ? c : -1]; s.jump = 2; }
+      else if (wonSmall) { to = [S, b, s.opts.precise ? c : -1]; s.jump = 1; }
+      else { to = [S, u, c]; s.jump = 0; }
+      if (to[0] >= 0 && s.sups[to[0]]) to = [-1, -1, -1];
+      if (to[1] >= 0 && s.ult[to[0] * 9 + to[1]]) to = [to[0], -1, -1];
+      if (to[2] >= 0 && s.small[to[0] * 81 + to[1] * 9 + to[2]]) to = [to[0], to[1], -1];
+      [s.sup, s.game, s.board] = to;
+      s.turn = 3 - p;
+      s.last = m;
+    },
+    // No deep search here: a game of Mega is thousands of moves long. The computer looks one move ahead.
+    ai(s, diff) {
+      const moves = Mega.legal(s);
+      if (diff === "easy" && Math.random() < 0.5) return rnd(moves);
+      const p = s.turn;
+      let best = [], bv = -Infinity;
+      for (const m of moves) {
+        const t = Mega.clone(s);
+        Mega.apply(t, m);
+        if (t.winner === p) return m;
+        let v = 0;
+        const S = (m / 729) | 0, ui = (m / 81) | 0, bi = (m / 9) | 0;
+        if (t.sups[S] === p) v += 1000;
+        if (t.ult[ui] === p) v += 100;
+        if (t.small[bi] === p) v += 10;
+        // Would this move have won it for the opponent? Then taking the cell blocks them.
+        s.cells[m] = 3 - p;
+        if (wins(s.cells, bi * 9, 3 - p)) v += 6;
+        s.cells[m] = 0;
+        if (diff === "hard") {
+          // Don't send the opponent somewhere they can win a board straight away.
+          const opp = Mega.legal(t);
+          let danger = 0;
+          for (const r of opp) {
+            const o = r - (r % 9);
+            t.cells[r] = 3 - p;
+            if (wins(t.cells, o, 3 - p)) danger = Math.max(danger, 8);
+            t.cells[r] = 0;
+            if (danger) break;
+          }
+          v -= danger;
+          if (t.sup < 0) v -= 3;   // letting them play anywhere is risky
+        }
+        v += Math.random();
+        if (v > bv) { bv = v; best = [m]; }
+      }
+      return best[0];
+    },
+    hint(s, n) {
+      if (!n) return "Red goes first. Play anywhere.";
+      if (s.sup < 0) return (s.jump ? "Jump! That's finished, so play" : "Play") + " anywhere open.";
+      const sup = SUPNAME[s.sup] + " Supreme game";
+      const where = s.game < 0 ? "anywhere in the " + sup
+        : s.board < 0 ? "in any open board of the " + POS[s.game] + " Ultimate game, in the " + sup
+        : "in the " + POS[s.board] + " board of the " + POS[s.game] + " Ultimate game, in the " + sup;
+      return (s.jump === 2 ? "Ultimate game won! Play " : s.jump === 1 ? "Board won! Play " : "Play ") + where + ".";
+    },
+    drawText: "No one can line up three Supreme games.",
+    delay: 200,
+    view: 4,
+
+    build(root) {
+      root.className = "supreme";
+      this.view = 4;
+      this.cellEls = []; this.smallEls = []; this.gameEls = [];
+      for (let g = 0; g < 9; g++) {
+        const ge = document.createElement("div");
+        ge.className = "ugame";
+        ge.setAttribute("role", "rowgroup");
+        for (let b = 0; b < 9; b++) {
+          const sb = document.createElement("div");
+          sb.className = "small";
+          for (let c = 0; c < 9; c++) {
+            const btn = document.createElement("button");
+            btn.type = "button"; btn.className = "cell";
+            sb.appendChild(btn); this.cellEls.push(btn);
+          }
+          const mk = document.createElement("div");
+          mk.className = "mark";
+          sb.appendChild(mk);
+          ge.appendChild(sb); this.smallEls.push(sb);
+        }
+        const gm = document.createElement("div");
+        gm.className = "gmark";
+        ge.appendChild(gm);
+        root.appendChild(ge); this.gameEls.push(ge);
+      }
+      // The map: nine Supreme games, each showing its nine Ultimate games.
+      const nav = $("megaNav");
+      nav.innerHTML = "";
+      this.navEls = [];
+      for (let S = 0; S < 9; S++) {
+        const t = document.createElement("button");
+        t.type = "button"; t.className = "mtile"; t.dataset.sup = S;
+        t.setAttribute("aria-label", SUPNAME[S] + " Supreme game");
+        for (let u = 0; u < 10; u++) t.appendChild(document.createElement("i"));
+        nav.appendChild(t); this.navEls.push(t);
+      }
+      this.lastSup = -1;
+    },
+    // Which Ultimate games of the Supreme game on screen can be played in: -1 any open one, a number for one, -2 none.
+    local(s) {
+      const V = this.view, games = s.ult.subarray(V * 9, V * 9 + 9);
+      if (s.winner || s.sups[V]) return { game: -2, games };
+      if (s.sup < 0) return { game: -1, games };
+      if (s.sup !== V) return { game: -2, games };
+      return { game: s.game, games };
+    },
+    render(root, s, moves, locked, popMove) {
+      // Follow play when it moves to a different Supreme game.
+      if (s.sup >= 0 && s.sup !== this.lastSup) this.view = s.sup;
+      this.lastSup = s.sup;
+      const V = this.view, base = V * 729;
+      for (let i = 0; i < 729; i++) {
+        const m = base + i, el = this.cellEls[i], v = s.cells[m];
+        drawCell(el, v, m === popMove);
+        el.id = "cell-" + m; el.dataset.m = m;
+        el.className = "cell" + (v ? " p" + v : "") + (m === s.last ? " last" : "");
+        el.disabled = !moves.has(m) || locked;
+        el.setAttribute("aria-label", POS[i % 9] + " cell, " + POS[((i % 81) / 9) | 0] + " board, " + POS[(i / 81) | 0] + " game, " + SUPNAME[V] + " Supreme");
+      }
+      const supActive = S => !s.winner && !s.sups[S] && (s.sup < 0 || s.sup === S);
+      const here = supActive(V);
+      root.classList.toggle("restricted", !s.winner && (!here || s.game >= 0));
+      for (let g = 0; g < 9; g++) {
+        const ui = V * 9 + g, gs = s.ult[ui], ge = this.gameEls[g];
+        const gameActive = here && !gs && (s.game < 0 || s.game === g);
+        for (let b = 0; b < 9; b++) {
+          const st = s.small[ui * 9 + b], sb = this.smallEls[g * 9 + b];
+          sb.className = "small" + (st ? " done" : "") + (st === 1 ? " won-1" : st === 2 ? " won-2" : st === 3 ? " drawn" : "") +
+            (gameActive && !st && (s.board < 0 || s.board === b) ? " active" : "");
+          const mk = sb.lastChild;
+          if (mk.dataset.v !== String(st)) { mk.innerHTML = st === 1 ? BIG_X : st === 2 ? BIG_O : ""; mk.dataset.v = st; }
+        }
+        ge.className = "ugame" + (gs ? " done" : "") + (gs === 1 ? " won-1" : gs === 2 ? " won-2" : gs === 3 ? " drawn" : "") +
+          (gameActive ? " active" : "") + (s.sups[V] && s.sups[V] < 3 && wins(s.ult, V * 9, s.sups[V]) && wins(s.ult, V * 9, s.sups[V]).includes(g) ? " winline" : "");
+        const gm = ge.lastChild;
+        if (gm.dataset.v !== String(gs)) {
+          gm.innerHTML = gs === 1 ? BIG_X : gs === 2 ? BIG_O : "";
+          gm.dataset.v = gs;
+          if (gm.firstChild && popMove >= 0 && ((popMove / 81) | 0) === ui) gm.firstChild.classList.add("pop");
+        }
+      }
+      for (let S = 0; S < 9; S++) {
+        const t = this.navEls[S], st = s.sups[S];
+        t.className = "mtile" + (S === V ? " here" : "") + (supActive(S) ? " active" : "") + (st ? " done" : "") +
+          (st === 1 ? " won-1" : st === 2 ? " won-2" : st === 3 ? " drawn" : "") + (s.line && s.line.includes(S) ? " winline" : "");
+        t.setAttribute("aria-pressed", S === V);
+        for (let u = 0; u < 9; u++) t.children[u].className = s.ult[S * 9 + u] ? "u" + s.ult[S * 9 + u] : "";
+        const big = t.children[9];
+        if (big.dataset.v !== String(st)) { big.innerHTML = st === 1 ? BIG_X : st === 2 ? BIG_O : ""; big.dataset.v = st; big.className = "big"; }
+      }
+      const nt = $("megaNavText");
+      nt.textContent = "Showing the " + SUPNAME[V] + " Supreme game.";
+      if (!s.winner && !here && s.sup >= 0) {
+        nt.append(" " + (locked ? "Play is" : "Your move is") + " in the " + SUPNAME[s.sup] + " one. ");
+        const go = document.createElement("button");
+        go.type = "button"; go.className = "linkbtn"; go.id = "megaGo"; go.textContent = "Go there";
+        nt.appendChild(go);
+      }
+    }
+  };
+
   // ================= 3D Cube (experimental) =================
   // A 3x3x3 cube of 27 small cubes. Cell index = floor * 9 + row * 3 + column
   // (floor 0 is the bottom). The center cube (13) is blocked. Play until every
@@ -1426,7 +1733,8 @@ button, .cell { touch-action: manipulation; }
   }
 
   // ================= App =================
-  const GAMES = { normal: Normal, ultimate: Ultimate, supreme: Supreme, cube: Cube };
+  const GAMES = { normal: Normal, ultimate: Ultimate, supreme: Supreme, mega: Mega, cube: Cube };
+  const zoomy = () => G === Supreme || G === Mega;
   let gameKey = "ultimate";
   let G = Ultimate;
   let state = G.newState();
@@ -1486,6 +1794,25 @@ button, .cell { touch-action: manipulation; }
     svg.innerHTML = h;
   })();
 
+  (function drawMegaArt() {
+    // Four levels: 9 Supreme games, 81 Ultimate games, 729 small boards (drawn as a fine grid).
+    const svg = $("megaArt");
+    let fine = "", mid = "", coarse = "";
+    for (let i = 1; i < 81; i++) {
+      if (i % 9) { const v = (2 + i * 86 / 81).toFixed(2); (i % 3 ? (fine += `M${v} 2V88M2 ${v}H88`) : (mid += `M${v} 2V88M2 ${v}H88`)); }
+    }
+    for (const v of [30.67, 59.33]) coarse += `M${v} 2V88M2 ${v}H88`;
+    let h = `<path d="${fine}" stroke="var(--muted)" stroke-opacity="0.18" stroke-width="0.25" fill="none"/>`;
+    h += `<path d="${mid}" stroke="var(--muted)" stroke-opacity="0.45" stroke-width="0.5" fill="none"/>`;
+    for (let i = 1; i < 9; i++) if (i % 3) { const v = (2 + i * 86 / 9).toFixed(2); h += `<path d="M${v} 2V88M2 ${v}H88" stroke="var(--muted)" stroke-opacity="0.7" stroke-width="0.9"/>`; }
+    h += `<path d="${coarse}" stroke="var(--muted)" stroke-width="2.2" stroke-linecap="round"/>`;
+    h += '<path d="M6 6L26 26M26 6L6 26" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>';
+    h += '<circle cx="74.6" cy="74.6" r="10" stroke="var(--blue)" stroke-width="3" fill="none"/>';
+    h += '<path d="M42 42L48 48M48 42L42 48" stroke="var(--red)" stroke-width="1.4" stroke-linecap="round"/>';
+    h += '<circle cx="54.5" cy="35.5" r="2.6" stroke="var(--blue)" stroke-width="1.1" fill="none"/>';
+    svg.innerHTML = h;
+  })();
+
   (function drawUltArt() {
     const svg = $("ultArt");
     let h = '<path d="M30 4V86M60 4V86M4 30H86M4 60H86" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round"/>';
@@ -1510,7 +1837,7 @@ button, .cell { touch-action: manipulation; }
     document.body.classList.toggle("turn-2", colorTurn === 2);
 
     G.render(board, s, moves, locked, popMove);
-    if (G === Supreme) {
+    if (zoomy()) {
       clearTimeout(zoomTimer);
       if (s.winner) setZoom(-1, true);   // show the whole board when the game ends
       else autoZoom();
@@ -1530,8 +1857,11 @@ button, .cell { touch-action: manipulation; }
       $("endTitle").textContent = leftMid ? (online.leftName || online.oppName) + " left." : s.winner === 3 ? "It's a draw." : NAME[s.winner] + " wins.";
       endNew.hidden = false; endNew.disabled = false; endNew.textContent = "New game";
       endText.textContent = "New game?";
-      $("endMenu").textContent = online && online.party ? "Back to party" : "Menu";
-      if (online && online.party) {
+      $("endMenu").textContent = online && online.party ? "Back to party" : online && online.async ? "Back to games" : "Menu";
+      if (online && online.async) {
+        endNew.hidden = true;
+        endText.textContent = (s.resigned ? pname(s.resigned) + " resigned. " : "") + "This game is finished.";
+      } else if (online && online.party) {
         endNew.hidden = true;
         endText.textContent = leftMid ? "Wait for them to come back, or go back to the party."
           : (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + "The party owner can start the next game.";
@@ -1551,7 +1881,7 @@ button, .cell { touch-action: manipulation; }
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
       main.textContent = NAME[s.winner] + " wins.";
-      sub.textContent = (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : pname(s.winner) + " wins.")
+      sub.textContent = (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + (s.resigned ? pname(s.resigned) + " resigned. " : "") + (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : pname(s.winner) + " wins.")
         : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "");
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
@@ -1565,7 +1895,8 @@ button, .cell { touch-action: manipulation; }
     $("undoBtn").disabled = thinking || !canUndo();
     $("restartBtn").hidden = !!online || settings.opp !== "2p";
     $("undoBtn").hidden = !!online && (!online.side || !!online.clock);   // no undo when watching, or in timed games
-    $("menuBtn").textContent = online && online.party ? "← Party" : "← Menu";
+    $("menuBtn").textContent = online && online.party ? "← Party" : online && online.async ? "← Games" : "← Menu";
+    $("resignBtn").hidden = !(online && online.async && online.side && !s.winner);
     const vs = $("vsLine");
     vs.hidden = !online;
     if (online) {
@@ -1596,6 +1927,7 @@ button, .cell { touch-action: manipulation; }
     if (old) old.remove();
     const s = state;
     if (!(s.winner === 1 || s.winner === 2) || !s.line) return;
+    if (G === Mega) return;   // Mega shows its winning line on the map
     const els = G === Normal ? Normal.cellEls : G === Ultimate ? Ultimate.smallEls : Supreme.gameEls;
     const br = board.getBoundingClientRect();
     if (!br.width) return;
@@ -1652,13 +1984,13 @@ button, .cell { touch-action: manipulation; }
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if ($("play").hidden) return;
-      if (G === Supreme) setZoom(zoomGame, true);
+      if (zoomy()) setZoom(zoomGame, true);
       drawWinLine(false);
     }, 100);
   });
 
   // The name of the player on a side in an online or party game.
-  const pname = side => online.party ? online.names[side] : side === online.side ? username : online.oppName;
+  const pname = side => online.names ? online.names[side] : side === online.side ? username : online.oppName;
 
   function canUndo() {
     if (!history.length) return false;
@@ -1671,6 +2003,7 @@ button, .cell { touch-action: manipulation; }
 
   function play(m, fromOpponent) {
     if (online && online.party) return partyMoves(online.moves.concat(m));
+    if (online && online.async) return asyncMoves(online.moves.concat(m));
     if (online && !fromOpponent) send({ t: "move", m });
     history.push(G.clone(state));
     G.apply(state, m);
@@ -1696,7 +2029,7 @@ button, .cell { touch-action: manipulation; }
     gameId++;
     thinking = false; counted = false;
     state = G.newState();
-    if (online && G === Supreme) state.opts = online.opts;
+    if (online && (G === Supreme || G === Mega)) state.opts = online.opts;
     history = [];
     render();
     maybeComputer();
@@ -1706,9 +2039,11 @@ button, .cell { touch-action: manipulation; }
   // On small screens the Zoom in button scales the board up around one
   // Ultimate game. It never zooms in or out by itself (except at the end).
   let zoomGame = -1, zoomTimer = null, picking = false;
-  const zoomable = () => G === Supreme && board.offsetWidth > 0 && board.offsetWidth < 640;
+  const zoomable = () => zoomy() && board.offsetWidth > 0 && board.offsetWidth < 640;
+  // The Ultimate games on screen: -1 any open one can be played, a number for one, -2 none.
+  const zlocal = () => G === Mega ? Mega.local(state) : { game: state.game, games: state.games };
   const humanTurn = () => !state.winner && !thinking && !isComputerTurn() && !(online && (state.turn !== online.side || online.left));
-  const canPick = g => state.game < 0 ? !state.games[g] : state.game === g;
+  const canPick = g => { const z = zlocal(); return z.game < 0 ? !z.games[g] : z.game === g; };
 
   function setZoom(g, instant) {
     zoomGame = g;
@@ -1716,7 +2051,7 @@ button, .cell { touch-action: manipulation; }
     if (instant) board.classList.add("notrans");
     if (!on || g < 0) board.style.transform = "";
     else {
-      const ge = Supreme.gameEls[g], m = 4;
+      const ge = G.gameEls[g], m = 4;
       const k = (board.clientWidth - 2 * m) / ge.offsetWidth;
       board.style.transform = `translate(${m - k * ge.offsetLeft}px, ${m - k * ge.offsetTop}px) scale(${k})`;
     }
@@ -1735,14 +2070,15 @@ button, .cell { touch-action: manipulation; }
 
   function updateZoomBar() {
     const bar = $("zoomBar"), text = $("zoomText"), btn = $("zoomBtn");
-    const on = G === Supreme && zoomable() && !state.winner;
+    const on = zoomy() && zoomable() && !state.winner;
     bar.hidden = !on;
     if (!on) return;
-    for (let g = 0; g < 9; g++) Supreme.gameEls[g].classList.toggle("pickable", picking && canPick(g));
+    for (let g = 0; g < 9; g++) G.gameEls[g].classList.toggle("pickable", picking && canPick(g));
     btn.hidden = false;
+    const z = zlocal();
     if (zoomGame >= 0) {
       text.textContent = "Zoomed in on the " + POS[zoomGame] + " game." +
-        (humanTurn() && !canPick(zoomGame) ? " Your move is in the " + POS[state.game] + " game." : "");
+        (humanTurn() && z.game >= 0 && !canPick(zoomGame) ? " Your move is in the " + POS[z.game] + " game." : "");
       btn.textContent = "Show whole board";
     }
     else if (picking) { text.textContent = "Tap a game to zoom in."; btn.textContent = "Cancel"; }
@@ -1753,7 +2089,7 @@ button, .cell { touch-action: manipulation; }
   $("zoomBtn").addEventListener("click", () => {
     if (zoomGame >= 0) setZoom(-1);
     else if (picking) { picking = false; setZoom(-1); }
-    else if (state.game >= 0) setZoom(state.game);
+    else if (zlocal().game >= 0) setZoom(zlocal().game);
     else { picking = true; setZoom(-1); }
   });
 
@@ -1769,12 +2105,14 @@ button, .cell { touch-action: manipulation; }
     normal: { easy: "Makes lots of mistakes.", medium: "Plays well but sometimes slips up.", hard: "Never loses. The best you can do is a draw." },
     ultimate: { easy: "Mostly random moves.", medium: "Thinks a few moves ahead.", hard: "Thinks for longer. Tough to beat." },
     supreme: { easy: "Mostly random moves.", medium: "Thinks a little ahead.", hard: "Thinks for longer before each move." },
+    mega: { easy: "Mostly random moves.", medium: "Grabs boards when it can.", hard: "Grabs boards and tries not to give you easy ones." },
     cube: { easy: "Mostly random moves.", medium: "Plays well but sometimes slips up.", hard: "Thinks for longer. Tough to beat." }
   };
   const DESC = {
     normal: "The classic game. Get three in a row.",
     ultimate: "Nine boards in one. Your move decides where your opponent plays next.",
     supreme: "Nine Ultimate games in one. 729 cells. Win a small board to send play to another game.",
+    mega: "Nine Supreme games in one. 6,561 cells. Win a whole Ultimate game to send play to another Supreme game.",
     cube: "Experimental. A 3×3×3 cube. Fill it up; whoever makes more lines of three wins."
   };
 
@@ -1812,16 +2150,17 @@ button, .cell { touch-action: manipulation; }
     zoomGame = -1; picking = false;
     G.build(board);
     board.appendChild(endOv);
-    $("boardWrap").classList.toggle("sup", G === Supreme);
-    if (G !== Supreme) $("zoomBar").hidden = true;
+    $("boardWrap").classList.toggle("sup", zoomy());
+    $("megaNavWrap").hidden = G !== Mega;
+    if (!zoomy()) $("zoomBar").hidden = true;
     if (G !== Cube) $("floorBar").hidden = true;
     $("gameTitle").textContent = G.title;
-    $("play").classList.toggle("wide", G === Supreme);
+    $("play").classList.toggle("wide", zoomy());
     // Online and party games have a chat under the board.
     $("playChatSlot").hidden = !online;
     if (online) $("playChatSlot").appendChild($("chat"));
     placeChat();
-    if (online && !online.party) {
+    if (online && !online.party && !online.async) {
       $("chatLog").innerHTML = "";
       chatLine("", "You're playing " + online.oppName + ". Say hi!", false, true);
     }
@@ -1904,6 +2243,7 @@ button, .cell { touch-action: manipulation; }
   }
   function leaveGuest() {
     leaveOnline();
+    stopAsyncList();
     if (fb && fb.auth.currentUser && fb.auth.currentUser.isAnonymous) fb.auth.signOut();
     guest = false;
     store("att-guest-on", null);
@@ -1937,17 +2277,20 @@ button, .cell { touch-action: manipulation; }
     fb.auth.onAuthStateChanged(user => {
       if (creating) return;
       if (!user) {
-        if (guest) { if (!$("authScreen").hidden) openAuth(authMode); return; }
+        if (guest) { if (!$("authScreen").hidden) openAuth(authMode); else renderMenu(); return; }
         username = ""; openAuth(authMode === "forgot" ? "login" : authMode); return;
       }
       if (user.isAnonymous) {   // a guest's hidden login, used only for parties
         if (!guest) { fb.auth.signOut(); return; }
+        renderMenu();
         rejoinParty();
+        rejoinAsync();
         return;
       }
       if (!user.displayName) { fb.auth.signOut(); return; }   // an account that never finished being made
       signedIn(user.displayName);
       rejoinParty();
+      rejoinAsync();
     });
   }
 
@@ -1960,6 +2303,7 @@ button, .cell { touch-action: manipulation; }
 
   function logOut() {
     leaveOnline();
+    stopAsyncList();
     $("authPass").value = "";
     fb.auth.signOut();
   }
@@ -2096,20 +2440,31 @@ button, .cell { touch-action: manipulation; }
     $("whoName").textContent = username || "Player";
     $("changeName").textContent = guest ? "Log in" : fb || FIREBASE_CONFIG ? "Log out" : "Change";
     for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
-    const partyMode = settings.where === "party";
+    const partyMode = settings.where === "party", asyncMode = settings.where === "async";
     $("partyMenu").hidden = !partyMode;
     $("partyGuest").hidden = !guest;
     $("partyCreateCard").hidden = guest;
-    document.querySelector("#menu .modes").hidden = partyMode;
-    document.querySelector("#menu .labs").hidden = partyMode;
+    $("asyncMenu").hidden = !asyncMode;
+    $("asyncGuest").hidden = !guest;
+    $("asyncCreateCard").hidden = guest;
+    const ak = AGAMES.includes(settings.agame) ? settings.agame : "ultimate";
+    for (const b of document.querySelectorAll("[data-agame]")) b.setAttribute("aria-pressed", b.dataset.agame === ak);
+    $("asyncPrecise").hidden = !EXTRAS[ak];
+    for (const b of document.querySelectorAll("[data-aprecise]")) b.setAttribute("aria-pressed", (b.dataset.aprecise === "1") === !!extraPrefs.precise);
+    document.querySelector("#menu .modes").hidden = partyMode || asyncMode;
+    document.querySelector("#menu .labs").hidden = partyMode || asyncMode;
+    watchAsyncList();
+    renderAsyncList();
     $("menuLede").textContent = partyMode
       ? "Make a party and send the code to your friends, or join one with a code. Chat, pick a game and play together."
+      : asyncMode
+      ? "Games you don't have to finish in one go. Make your move, leave, and come back for your next turn whenever you like."
       : settings.where === "online"
       ? "Red against Blue, online. Pick a game to join the queue. It starts when another player joins."
       : "Red against Blue. Pick a game, then play a friend on this screen or take on the computer.";
   }
   for (const btn of document.querySelectorAll("[data-where]")) btn.addEventListener("click", () => {
-    settings.where = btn.dataset.where; save(); partyMenuErr(""); renderMenu();
+    settings.where = btn.dataset.where; save(); partyMenuErr(""); asyncErr(""); renderMenu();
   });
   const pickGame = key => settings.where === "online" ? startQueue(key) : openSetup(key);
 
@@ -2141,6 +2496,7 @@ button, .cell { touch-action: manipulation; }
   }
   function leaveOnline(e) {
     if (party) leaveParty(!(e instanceof Event));   // closing the page keeps your party, so a refresh can rejoin it
+    if (agame) closeAsync(!(e instanceof Event));
     if (net) {
       const n = net;
       if (online) send({ t: "bye" });
@@ -2293,6 +2649,10 @@ button, .cell { touch-action: manipulation; }
     supreme: [
       { key: "precise", name: "Precise jumps",
         desc: "When you win a small board, the cell you won it with also picks the small board your opponent plays in. Win the top-left board with a middle cell, and they play in the middle board of the top-left game." }
+    ],
+    mega: [
+      { key: "precise", name: "Precise jumps",
+        desc: "When play jumps, the boards you won with also pick where your opponent goes. Win a small board with a middle cell, and they play in the middle board of the game it sends them to. Win a whole Ultimate game, and the board and cell you won it with pick the Ultimate game and small board in the next Supreme game." }
     ]
   };
   let extraPrefs = {};
@@ -2414,7 +2774,7 @@ button, .cell { touch-action: manipulation; }
 
   function fbErrorText(e) {
     const c = (e && e.code) || "";
-    if (c.includes("permission")) return "That isn't allowed. If this keeps happening, the party settings in Firebase may need updating.";
+    if (c.includes("permission")) return "That isn't allowed. If this keeps happening, the settings in Firebase may need updating.";
     if (c.includes("unavailable") || c.includes("network")) return "Couldn't connect. Check your internet connection.";
     return (e && e.message && !c) ? e.message : "Something went wrong. Try again.";
   }
@@ -2731,11 +3091,13 @@ button, .cell { touch-action: manipulation; }
     if (ci && ci.flagged && ci.at < ms.length) ms = ms.slice(0, ci.at);   // moves after running out don't count
     const cur = online.moves;
     const prefix = cur.length <= ms.length && cur.every((v, i) => v === ms[i]);
+    const resigned = online.async && agame && agame.doc && agame.doc.resigned;
     const flag = () => {
       if (ci && ci.flagged && !state.winner) { state.winner = 3 - ci.flagged; state.timeout = ci.flagged; state.line = null; }
+      if (resigned && !state.winner) { state.winner = 3 - resigned; state.resigned = resigned; state.line = null; }
     };
-    if (prefix && cur.length === ms.length) { flag(); return render(); }
-    if (prefix && ms.length === cur.length + 1 && !state.timeout && G.legal(state).includes(ms[cur.length])) {
+    if (prefix && cur.length === ms.length && (state.resigned || 0) === (resigned || 0)) { flag(); return render(); }
+    if (prefix && ms.length === cur.length + 1 && !state.timeout && !state.resigned && G.legal(state).includes(ms[cur.length])) {
       const mv = ms[cur.length];
       history.push(G.clone(state)); G.apply(state, mv); online.moves = ms.slice();
       flag();
@@ -2743,7 +3105,7 @@ button, .cell { touch-action: manipulation; }
     }
     // An undo (or a jump of several moves): replay the game from the start.
     state = G.newState();
-    if (G === Supreme) state.opts = online.opts;
+    if (G === Supreme || G === Mega) state.opts = online.opts;
     history = []; online.moves = [];
     for (const m of ms) {
       if (state.winner || !G.legal(state).includes(m)) break;
@@ -2822,7 +3184,7 @@ button, .cell { touch-action: manipulation; }
 
   // ---------- Chat ----------
   function onChat(p, snap) {
-    if (party !== p) return;
+    if (party !== p && agame !== p) return;
     const log = $("chatLog");
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
     log.innerHTML = "";
@@ -2848,6 +3210,13 @@ button, .cell { touch-action: manipulation; }
     e.preventDefault();
     const inp = $("chatIn"), text = inp.value.trim().slice(0, 300);
     if (!text) return;
+    if (online && online.async) {
+      if (!agame || !online.side) return;
+      inp.value = "";
+      return gref(agame.code).collection("chat").add({ uid: agame.me, name: username, text, ts: stamp() }).catch(() => {
+        chatLine("", "Couldn't send that message.", false, true);
+      });
+    }
     if (online && !online.party) {
       inp.value = "";
       if (online.left) return chatLine("", online.oppName + " has left, so they won't see messages.", false, true);
@@ -2861,6 +3230,234 @@ button, .cell { touch-action: manipulation; }
       row.className = "msg sys"; row.textContent = "Couldn't send that message.";
       $("chatLog").appendChild(row);
     });
+  });
+
+  // ================= Anytime games =================
+  // Games that don't need both players online at once. Every move is saved in Firebase,
+  // so you can leave and come back to take your turn whenever you like.
+  const AGAMES = ["normal", "ultimate", "supreme", "mega"];
+  const gref = code => fb.db.collection("games").doc(code);
+  let alist = null, alistBusy = false;   // the list of your games: { uid, games, loaded, unsub }
+  let agame = null;                      // the anytime game on screen: { code, me, doc, unsubs }
+  let asyncRejoinTried = false;
+  const resultCache = new Map();
+  function asyncErr(t) { $("asyncErr").textContent = t || ""; }
+  const newCode = () => { let c = ""; for (let j = 0; j < 5; j++) c += CODE_CHARS[(Math.random() * CODE_CHARS.length) | 0]; return c; };
+
+  // Accounts always see their games (so the menu can show whose turn it is). Guests only once they open the Anytime tab.
+  async function watchAsyncList() {
+    if (!fb || alistBusy) return;
+    const u = fb.auth.currentUser;
+    if (guest ? settings.where !== "async" && !(u && u.isAnonymous) : !u || u.isAnonymous) return;
+    if (alist && u && alist.uid === u.uid) return;
+    alistBusy = true;
+    let user;
+    try { user = await partyUser(); }
+    catch (e) { asyncErr(e.message || fbErrorText(e)); return; }
+    finally { alistBusy = false; }
+    if (alist && alist.uid === user.uid) return;
+    stopAsyncList();
+    const l = alist = { uid: user.uid, games: [], loaded: false, unsub: null };
+    l.unsub = fb.db.collection("games").where("players", "array-contains", user.uid).onSnapshot(snap => {
+      if (alist !== l) return;
+      l.games = snap.docs.map(d => Object.assign({ code: d.id }, d.data({ serverTimestamps: "estimate" })));
+      l.loaded = true;
+      renderAsyncList();
+    }, e => { if (alist === l) { l.loaded = true; asyncErr(fbErrorText(e)); renderAsyncList(); } });
+    renderAsyncList();
+  }
+  function stopAsyncList() {
+    if (alist) { try { alist.unsub && alist.unsub(); } catch (e) {} }
+    alist = null;
+    renderAsyncList();
+  }
+
+  // Who won a finished game? Replays its moves (remembered, so it's only worked out once).
+  function asyncWinner(g) {
+    if (g.resigned) return 3 - g.resigned;
+    const key = g.code + ":" + (g.moves || []).length, G2 = GAMES[g.game];
+    if (resultCache.has(key)) return resultCache.get(key);
+    if (!G2) return 0;
+    const st = G2.newState();
+    if (st.opts) st.opts = g.opts || {};
+    for (const m of g.moves || []) { if (st.winner) break; G2.apply(st, m); }
+    resultCache.set(key, st.winner);
+    return st.winner;
+  }
+  function asyncStatus(g, uid) {
+    const side = g.red === uid ? 1 : 2, n = (g.moves || []).length;
+    if (!g.blue) return { k: 3, text: "Waiting for someone to join. Code: " + g.code };
+    if (g.done || g.resigned) {
+      const w = asyncWinner(g);
+      const how = g.resigned ? (g.resigned === side ? "You resigned" : "They resigned") + ". " : "";
+      return { k: 4, text: how + (w === 3 ? "It's a draw." : w === side ? "You won!" : w ? "You lost." : "Finished.") };
+    }
+    const turn = n % 2 === 0 ? 1 : 2;
+    return { k: turn === side ? 1 : 2, text: (turn === side ? "Your turn" : "Their turn") + " · " + n + (n === 1 ? " move" : " moves") };
+  }
+
+  function renderAsyncList() {
+    const ul = $("asyncList"), l = alist;
+    ul.innerHTML = "";
+    const rows = l ? l.games.map(g => ({ g, st: asyncStatus(g, l.uid) })) : [];
+    rows.sort((a, b) => a.st.k - b.st.k || (tms(b.g.updated) || 0) - (tms(a.g.updated) || 0));
+    $("asyncEmpty").textContent = !l || !l.loaded ? "Loading your games…" : rows.length ? "" : "No games yet. Start one, or join one with a code.";
+    for (const { g, st } of rows) {
+      const li = document.createElement("li");
+      li.className = "k" + st.k;
+      const info = document.createElement("div"), b = document.createElement("b"), stt = document.createElement("div");
+      info.className = "ainfo"; stt.className = "ast";
+      b.textContent = GAMES[g.game] ? GAMES[g.game].title : g.game;
+      const side = g.red === l.uid ? 1 : 2;
+      info.append(b, g.blue ? " vs " + (side === 1 ? g.blueName : g.redName) : "");
+      stt.textContent = st.text;
+      info.appendChild(stt);
+      const btns = document.createElement("div");
+      btns.className = "abtns";
+      const add = (text, primary, fn) => {
+        const x = document.createElement("button");
+        x.type = "button"; x.className = "btn" + (primary ? " primary" : ""); x.textContent = text;
+        x.addEventListener("click", fn);
+        btns.appendChild(x);
+      };
+      if (g.blue) add(st.k === 1 ? "Play" : "Open", st.k === 1, () => openAsync(g.code));
+      else add("Copy code", false, e => {
+        if (navigator.clipboard) navigator.clipboard.writeText(g.code).then(() => { e.target.textContent = "Copied!"; }, () => {});
+      });
+      if (!g.blue || st.k === 4) add(g.blue ? "Remove" : "Cancel", false, () => {
+        if (!g.blue || confirm("Remove this game? It goes for both players.")) gref(g.code).delete().catch(e => asyncErr(fbErrorText(e)));
+      });
+      li.append(info, btns);
+      ul.appendChild(li);
+    }
+    const mine = rows.filter(x => x.st.k === 1).length;
+    $("where-async").textContent = "Anytime" + (mine ? " (" + mine + ")" : "");
+  }
+
+  async function createAsync() {
+    asyncErr("");
+    if (guest) return asyncErr("Starting a game needs an account. Guests can join one with a code.");
+    $("asyncCreate").disabled = true;
+    try {
+      const user = await partyUser();
+      const key = AGAMES.includes(settings.agame) ? settings.agame : "ultimate";
+      const opts = {};
+      for (const x of EXTRAS[key] || []) opts[x.key] = !!extraPrefs[x.key];
+      for (let i = 0; i < 5; i++) {
+        const code = newCode();
+        const made = await fb.db.runTransaction(async t => {
+          if ((await t.get(gref(code))).exists) return false;
+          t.set(gref(code), { game: key, opts, red: user.uid, blue: "", redName: username, blueName: "",
+            players: [user.uid], moves: [], done: false, resigned: 0, updated: stamp() });
+          return true;
+        });
+        if (made) { watchAsyncList(); return; }
+      }
+      asyncErr("Couldn't make a game. Try again.");
+    } catch (e) { asyncErr(fbErrorText(e)); }
+    finally { $("asyncCreate").disabled = false; }
+  }
+
+  async function joinAsync(raw) {
+    const code = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 5) return asyncErr("Game codes are 5 letters and numbers.");
+    asyncErr("");
+    $("asyncJoin").disabled = true;
+    try {
+      const user = await partyUser();
+      const snap = await gref(code).get();
+      if (!snap.exists) return asyncErr("No game has that code. Check it and try again.");
+      const g = snap.data();
+      if (g.red !== user.uid && g.blue !== user.uid) {
+        if (g.blue) return asyncErr("That game already has two players.");
+        await gref(code).update({ blue: user.uid, blueName: username, players: [g.red, user.uid], updated: stamp() });
+      }
+      $("asyncCodeIn").value = "";
+      if (g.red === user.uid && !g.blue) return asyncErr("That's your own game. Send the code to a friend so they can join.");
+      watchAsyncList();
+      openAsync(code);
+    } catch (e) { asyncErr(fbErrorText(e)); }
+    finally { $("asyncJoin").disabled = false; }
+  }
+
+  async function openAsync(code) {
+    asyncErr("");
+    let user;
+    try { user = await partyUser(); } catch (e) { return asyncErr(e.message || fbErrorText(e)); }
+    leaveOnline();
+    const a = agame = { code, me: user.uid, doc: null, unsubs: [] };
+    a.unsubs.push(gref(code).onSnapshot(snap => onAsyncDoc(a, snap), e => asyncGone(a, fbErrorText(e))));
+  }
+
+  function onAsyncDoc(a, snap) {
+    if (agame !== a) return;
+    if (!snap.exists) return asyncGone(a, "That game was removed.");
+    const d = a.doc = snap.data();
+    if (!d.blue || !GAMES[d.game]) return asyncGone(a, "Nobody has joined that game yet.");
+    if (!online || online.async !== a.code) {
+      const side = d.red === a.me ? 1 : d.blue === a.me ? 2 : 0;
+      online = { async: a.code, side, names: { 1: d.redName, 2: d.blueName }, oppName: side === 1 ? d.blueName : d.redName,
+        opts: d.opts || {}, clock: 0, started: true, left: false, leftName: "", moves: [] };
+      gameKey = d.game; G = GAMES[d.game];
+      try { sessionStorage.setItem("att-async", a.code); } catch (e) {}
+      $("chatLog").innerHTML = "";
+      startGame();
+      a.unsubs.push(gref(a.code).collection("chat").orderBy("ts").limitToLast(60).onSnapshot(s => onChat(a, s), () => {}));
+    }
+    applyMoves(d.moves || []);
+  }
+
+  function asyncGone(a, msg) {
+    if (agame !== a) return;
+    closeAsync(true);
+    if (online && online.async) online = null;
+    settings.where = "async";
+    showMenu();
+    asyncErr(msg);
+  }
+
+  function closeAsync(explicit) {
+    const a = agame;
+    if (!a) return;
+    agame = null;
+    a.unsubs.forEach(u => { try { u(); } catch (e) {} });
+    if (explicit) { try { sessionStorage.removeItem("att-async"); } catch (e) {} }
+  }
+
+  // After a refresh, go back into the anytime game you had open.
+  function rejoinAsync() {
+    if (asyncRejoinTried || party || agame) return;
+    asyncRejoinTried = true;
+    let code = null;
+    try { code = sessionStorage.getItem("att-async"); } catch (e) {}
+    if (code) { settings.where = "async"; renderMenu(); openAsync(code); }
+  }
+
+  function asyncMoves(ms) {
+    const a = agame;
+    if (!a || !online || !online.async) return;
+    const k = online.moves.length;
+    let done = false;
+    if (ms.length === k + 1) { const t = G.clone(state); G.apply(t, ms[k]); done = !!t.winner; }
+    else if (ms.length !== k - 1) return;
+    gref(a.code).update({ moves: ms, done, updated: stamp() }).catch(e => chatLine("", "Couldn't save that move: " + fbErrorText(e), false, true));
+  }
+
+  $("resignBtn").addEventListener("click", () => {
+    const a = agame;
+    if (!a || !online || !online.async || !online.side || state.winner) return;
+    if (!confirm("Resign this game? " + pname(3 - online.side) + " will win.")) return;
+    gref(a.code).update({ resigned: online.side, done: true, updated: stamp() }).catch(e => chatLine("", fbErrorText(e), false, true));
+  });
+  $("asyncCreate").addEventListener("click", createAsync);
+  $("asyncLogin").addEventListener("click", leaveGuest);
+  $("asyncJoinForm").addEventListener("submit", e => { e.preventDefault(); joinAsync($("asyncCodeIn").value); });
+  $("asyncCodeIn").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+  for (const b of document.querySelectorAll("[data-agame]")) b.addEventListener("click", () => { settings.agame = b.dataset.agame; save(); renderMenu(); });
+  for (const b of document.querySelectorAll("[data-aprecise]")) b.addEventListener("click", () => {
+    extraPrefs.precise = b.dataset.aprecise === "1";
+    try { localStorage.setItem("att-extras", JSON.stringify(extraPrefs)); } catch (e) {}
+    renderMenu();
   });
 
   $("partyCreate").addEventListener("click", createParty);
@@ -2912,10 +3509,10 @@ button, .cell { touch-action: manipulation; }
   $("endMenu").addEventListener("click", () => online && online.party ? showParty() : showMenu());
   board.addEventListener("click", e => {
     // After pressing Zoom in (when play can go anywhere), tap a game to zoom into it.
-    if (G === Supreme && picking) {
+    if (zoomy() && picking) {
       const ge = e.target.closest(".ugame");
       if (!ge || !humanTurn()) return;
-      const g = Supreme.gameEls.indexOf(ge);
+      const g = G.gameEls.indexOf(ge);
       if (canPick(g)) setZoom(g);
       return;
     }
@@ -2923,9 +3520,17 @@ button, .cell { touch-action: manipulation; }
     if (!btn || btn.disabled) return;
     play(+btn.dataset.m);
   });
+  $("megaNavWrap").addEventListener("click", e => {
+    const t = e.target.closest(".mtile, #megaGo");
+    if (!t || G !== Mega) return;
+    Mega.view = t.id === "megaGo" ? state.sup : +t.dataset.sup;
+    setZoom(-1, true);
+    render();
+  });
   $("undoBtn").addEventListener("click", () => {
     if (thinking || !canUndo()) return;
     if (online && online.party) return partyMoves(online.moves.slice(0, -1));
+    if (online && online.async) return asyncMoves(online.moves.slice(0, -1));
     if (online) {
       send({ t: "undo", n: history.length });
       state = history.pop();
