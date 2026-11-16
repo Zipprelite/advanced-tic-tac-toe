@@ -141,9 +141,11 @@ service cloud.firestore {
           && request.resource.data.hidden == resource.data.get('hidden', []).concat([request.auth.uid]);
       }
       allow update: if signedIn() && (moveOk() || joinOk() || resignOk() || hideOk());
-      // A player can cancel an invite nobody has accepted. A finished game is deleted once both players have removed it.
-      allow delete: if signedIn() && player() && (resource.data.red == '' || resource.data.blue == ''
-        || (resource.data.done == true && resource.data.get('hidden', []).hasAny([resource.data.red, resource.data.blue])));
+      // An invite nobody has accepted can be cancelled (or declined by the invited player).
+      // A finished game is deleted once both players have removed it.
+      allow delete: if signedIn()
+        && ((resource.data.red == '' || resource.data.blue == '') && (player() || request.auth.uid == resource.data.invitee)
+          || (player() && resource.data.done == true && resource.data.get('hidden', []).hasAny([resource.data.red, resource.data.blue])));
 
       match /chat/{id} {
         function g() { return get(/databases/$(database)/documents/games/$(code)).data; }
@@ -160,15 +162,16 @@ service cloud.firestore {
       }
     }
 
-    // Messages between two accounts. The conversation id is the two account ids in order, joined by _.
-    match /dms/{id} {
+    // Friends. The id is the two account ids in order, joined by _. It starts as a request
+    // ("pending", from = who asked) and becomes "friends" when the other player accepts.
+    match /friends/{id} {
       function member() { return request.auth.uid in resource.data.users; }
       function owns(d, u) { return d.names[u] is string
         && get(/databases/$(database)/documents/usernames/$(d.names[u].lower())).data.uid == u; }
       allow get: if signedIn() && (resource == null || member());
       allow list: if signedIn() && request.auth.uid in resource.data.users;
       allow create: if signedIn() && !isGuest()
-        && request.resource.data.keys().hasOnly(['users', 'names', 'last', 'read', 'updated'])
+        && request.resource.data.keys().hasOnly(['users', 'names', 'from', 'status', 'updated'])
         && request.resource.data.users.size() == 2
         && request.auth.uid in request.resource.data.users
         && request.resource.data.users[0] < request.resource.data.users[1]
@@ -176,37 +179,38 @@ service cloud.firestore {
         && request.resource.data.names.keys().hasOnly(request.resource.data.users)
         && owns(request.resource.data, request.resource.data.users[0])
         && owns(request.resource.data, request.resource.data.users[1])
-        && request.resource.data.last == null
-        && request.resource.data.read == {}
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.status == 'pending'
         && request.resource.data.updated == request.time;
-      // Members can mark it read, and record their own latest message for the list.
-      allow update: if signedIn() && member() && !isGuest()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last', 'read', 'updated'])
-        && request.resource.data.read.diff(resource.data.read).affectedKeys().hasOnly([request.auth.uid])
-        && (request.resource.data.last == resource.data.last
-          || (request.resource.data.last.keys().hasOnly(['from', 'text', 'ts'])
-            && request.resource.data.last.from == request.auth.uid
-            && request.resource.data.last.text is string
-            && request.resource.data.last.text.size() <= 120
-            && request.resource.data.last.ts == request.time))
-        && (request.resource.data.updated == resource.data.updated || request.resource.data.updated == request.time);
+      // Only the player who was asked can accept.
+      allow update: if signedIn() && member() && request.auth.uid != resource.data.from
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updated'])
+        && request.resource.data.status == 'friends'
+        && request.resource.data.updated == request.time;
+      // Either player can decline, cancel, or unfriend.
+      allow delete: if signedIn() && member();
+    }
 
-      match /msgs/{m} {
-        function users() { return get(/databases/$(database)/documents/dms/$(id)).data.users; }
-        allow read: if signedIn() && request.auth.uid in users();
-        allow create: if signedIn() && !isGuest() && request.auth.uid in users()
-          && request.resource.data.keys().hasOnly(['from', 'text', 'ts', 'invite'])
-          && (!('invite' in request.resource.data)
-            || (request.resource.data.invite.keys().hasOnly(['kind', 'code', 'game'])
-              && request.resource.data.invite.kind in ['live', 'unsynced']
-              && request.resource.data.invite.code.matches('[A-Z2-9]{5}')
-              && request.resource.data.invite.game in ['normal', 'ultimate', 'supreme', 'mega']))
-          && request.resource.data.from == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 500
-          && request.resource.data.ts == request.time;
-      }
+    // Invites to a game. You can only invite a friend.
+    match /invites/{id} {
+      function pair(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+      allow read: if signedIn() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+      allow create: if signedIn() && !isGuest()
+        && request.resource.data.keys().hasOnly(['from', 'to', 'fromName', 'toName', 'kind', 'code', 'game', 'side', 'first', 'timer', 'precise', 'created'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string && request.resource.data.to != request.auth.uid
+        && get(/databases/$(database)/documents/friends/$(pair(request.auth.uid, request.resource.data.to))).data.status == 'friends'
+        && realName(request.resource.data.fromName)
+        && request.resource.data.toName is string
+        && request.resource.data.kind in ['live', 'unsynced']
+        && request.resource.data.code.matches('[A-Z2-9]{5}')
+        && request.resource.data.game in ['normal', 'ultimate', 'supreme', 'mega']
+        && request.resource.data.side in [1, 2] && request.resource.data.first in [1, 2]
+        && request.resource.data.timer in [0, 10, 30, 60, 90]
+        && request.resource.data.precise is bool
+        && request.resource.data.created == request.time;
+      allow delete: if signedIn() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
     }
   }
 }

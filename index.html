@@ -340,37 +340,28 @@ button, .cell { touch-action: manipulation; }
 .agames .btn { padding: 6px 12px; font-size: 13px; }
 @media (max-width: 640px) { .party-menu { grid-template-columns: 1fr; } }
 .party-guest { gap: 12px; max-width: 520px; }
-/* Messages */
+/* Friends */
 .dm-title { font-weight: 800; font-size: clamp(32px, 6vw, 48px); letter-spacing: -0.025em; line-height: 1; }
-.dm-grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.dm-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .dm-side { gap: 14px; }
 .dm-new { display: flex; flex-direction: column; gap: 8px; }
 .dm-new .err:empty { display: none; }
-.dm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.dm-list button { appearance: none; width: 100%; text-align: left; font: inherit; color: var(--ink); border: 0; border-radius: 10px; padding: 10px 12px; background: var(--cell); cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-.dm-list button[aria-current="true"] { outline: 2px solid var(--blue); outline-offset: -2px; }
-.dm-list .who-row { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
-.dm-list .prev { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dm-list .unread .who-row::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--red); align-self: center; flex: none; }
-.dm-list .unread .prev { color: var(--ink); font-weight: 600; }
-.dm-thread { gap: 12px; }
-.dm-head { display: flex; align-items: center; gap: 12px; min-height: 36px; font-size: 17px; }
-.dm-head #dmWith { flex: 1; min-width: 0; }
-.dm-head #dmInviteBtn { padding: 8px 12px; font-size: 14px; }
+.fr-sec { display: flex; flex-direction: column; gap: 10px; }
+.fr-list li { justify-content: space-between; }
+.fr-list .fname { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.fr-list .fdesc { display: block; color: var(--muted); font-size: 13px; font-weight: 500; margin-top: 2px; }
+.fr-list .abtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.fr-list .btn { padding: 6px 12px; font-size: 13px; }
+.fr-list li.in { box-shadow: inset 3px 0 0 var(--blue); }
+.inv-title { font-size: 17px; }
+.dm-area .err.ok { color: var(--muted); }
 .dm-invite { display: flex; flex-direction: column; gap: 14px; padding: 14px; border-radius: 12px; background: var(--cell); }
 .dm-invite .seg { background: var(--surface); }
 .dm-invite-btns { display: flex; gap: 8px; }
 .dm-area .err:empty, .party-menu .err:empty { display: none; }
-.msg .inv { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-style: normal; }
-.msg .inv .btn { padding: 6px 12px; font-size: 13px; }
-.msg .inv .st { color: var(--muted); font-size: 13px; font-weight: 600; }
-.dm-head .btn.back { display: none; }
-.dm-log { min-height: 340px; max-height: 60vh; }
-.dm-log .msg .t { color: var(--muted); font-size: 12px; margin-left: 8px; }
+
 @media (max-width: 760px) {
   .dm-grid { grid-template-columns: 1fr; }
-  .dm-grid.open .dm-side, .dm-grid:not(.open) .dm-thread { display: none; }
-  .dm-head .btn.back { display: inline-flex; }
 }
 .code-in { text-transform: uppercase; letter-spacing: 0.25em; font-weight: 700; text-align: center; font-size: 20px; }
 .party { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
@@ -506,37 +497,39 @@ button, .cell { touch-action: manipulation; }
       <div class="seg where" role="group" aria-label="Where to play">
         <button type="button" id="where-local" data-where="local">This device</button>
         <button type="button" id="where-online" data-where="online">Online</button>
-        <button type="button" id="where-messages" data-where="messages">Messages</button>
+        <button type="button" id="where-friends" data-where="friends">Friends</button>
         <button type="button" id="where-async" data-where="async">Unsynced</button>
       </div>
       <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button></p>
     </div>
-    <div class="dm-area" id="dmArea" hidden>
-      <div class="setup-card party-guest" id="dmGuest" hidden>
-        <span class="label">Messages need an account</span>
-        <p class="note">You're playing as a guest. Log in or create an account to send messages and invite people to play.</p>
-        <button type="button" class="btn primary start" id="dmLogin">Log in or create an account</button>
+    <div class="dm-area" id="frArea" hidden>
+      <div class="setup-card party-guest" id="frGuest" hidden>
+        <span class="label">Friends need an account</span>
+        <p class="note">You're playing as a guest. Log in or create an account to add friends and invite them to play.</p>
+        <button type="button" class="btn primary start" id="frLogin">Log in or create an account</button>
       </div>
-      <div class="dm-grid" id="dmMain">
-        <div class="setup-card dm-side" id="dmSide">
-          <form class="dm-new" id="dmNewForm" novalidate>
-            <label class="label" for="dmTo">New message</label>
+      <div class="dm-grid" id="frMain">
+        <div class="setup-card dm-side">
+          <form class="dm-new" id="frAddForm" novalidate>
+            <label class="label" for="frAddIn">Add a friend</label>
             <div class="chat-form">
-              <input type="text" class="text-in" id="dmTo" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Username">
-              <button type="submit" class="btn" id="dmStart">Start</button>
+              <input type="text" class="text-in" id="frAddIn" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Their username">
+              <button type="submit" class="btn" id="frAdd">Add</button>
             </div>
           </form>
-          <span class="label">Conversations</span>
-          <ul class="dm-list" id="dmList"></ul>
-          <p class="note" id="dmEmpty"></p>
-        </div>
-        <div class="setup-card dm-thread" id="dmThread">
-          <div class="dm-head">
-            <button type="button" class="btn back" id="dmThreadBack">← All</button>
-            <b id="dmWith">Pick a conversation</b>
-            <button type="button" class="btn" id="dmInviteBtn" hidden>Invite to play</button>
+          <div class="fr-sec" id="frReqWrap" hidden>
+            <span class="label">Friend requests</span>
+            <ul class="members fr-list" id="frReqs"></ul>
           </div>
+          <div class="fr-sec">
+            <span class="label">Friends</span>
+            <ul class="members fr-list" id="frList"></ul>
+            <p class="note" id="frEmpty"></p>
+          </div>
+        </div>
+        <div class="setup-card dm-thread">
           <div class="dm-invite" id="dmInvite" hidden>
+            <b class="inv-title" id="invTitle">Invite</b>
             <div class="group">
               <span class="label">Game</span>
               <div class="seg" role="group" aria-label="Game">
@@ -590,14 +583,12 @@ button, .cell { touch-action: manipulation; }
               <button type="button" class="btn" id="dmInviteCancel">Cancel</button>
             </div>
           </div>
-          <div class="chat-log dm-log" id="dmLog" aria-live="polite"></div>
-          <form class="chat-form" id="dmForm" novalidate>
-            <input type="text" class="text-in" id="dmIn" maxlength="500" autocomplete="off" placeholder="Write a message…" aria-label="Message">
-            <button type="submit" class="btn primary">Send</button>
-          </form>
+          <span class="label">Invites</span>
+          <ul class="members fr-list" id="invList"></ul>
+          <p class="note" id="invEmpty"></p>
         </div>
       </div>
-      <p class="note err" id="dmErr" role="alert"></p>
+      <p class="note err" id="frErr" role="alert"></p>
     </div>
     <div class="party-menu" id="asyncMenu" hidden>
       <div class="setup-card wide-card">
@@ -2336,7 +2327,7 @@ button, .cell { touch-action: manipulation; }
   function leaveGuest() {
     leaveOnline();
     stopAsyncList();
-    stopDms();
+    stopFriends();
     if (fb && fb.auth.currentUser && fb.auth.currentUser.isAnonymous) fb.auth.signOut();
     guest = false;
     store("att-guest-on", null);
@@ -2397,7 +2388,7 @@ button, .cell { touch-action: manipulation; }
   function logOut() {
     leaveOnline();
     stopAsyncList();
-    stopDms();
+    stopFriends();
     $("authPass").value = "";
     fb.auth.signOut();
   }
@@ -2534,21 +2525,21 @@ button, .cell { touch-action: manipulation; }
     $("whoName").textContent = username || "Player";
     $("changeName").textContent = guest ? "Log in" : fb || FIREBASE_CONFIG ? "Log out" : "Change";
     for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
-    if (settings.where === "party") settings.where = "messages";   // the old Party tab is now Messages
+    if (settings.where === "party" || settings.where === "messages") settings.where = "friends";   // older tabs, now Friends
     for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
-    const msgMode = settings.where === "messages", asyncMode = settings.where === "async";
-    $("dmArea").hidden = !msgMode;
+    const msgMode = settings.where === "friends", asyncMode = settings.where === "async";
+    $("frArea").hidden = !msgMode;
     $("asyncMenu").hidden = !asyncMode;
     document.querySelector("#menu .modes").hidden = msgMode || asyncMode;
     document.querySelector("#menu .labs").hidden = msgMode || asyncMode;
     watchAsyncList();
     renderAsyncList();
-    watchDms();
-    renderDms();
+    watchFriends();
+    renderFriends();
     $("menuLede").textContent = msgMode
-      ? "Message other players, and invite them to a game. Play it live, or unsynced so you each take your turn whenever you like."
+      ? "Add friends by their username, and invite them to a game. Play it live, or unsynced so you each take your turn whenever you like."
       : asyncMode
-      ? "Your unsynced games. Make your move, leave, and come back for your next turn whenever you like. To start one, send an invite in Messages."
+      ? "Your unsynced games. Make your move, leave, and come back for your next turn whenever you like. To start one, invite a friend from Friends."
       : settings.where === "online"
       ? "Red against Blue, online. Pick a game to join the queue. It starts when another player joins."
       : "Red against Blue. Pick a game, then play a friend on this screen or take on the computer.";
@@ -2860,7 +2851,7 @@ button, .cell { touch-action: manipulation; }
   let party = null, rejoinTried = false;
   const pref = code => fb.db.collection("parties").doc(code);
   const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
-  const partyMenuErr = t => { $("dmErr").textContent = t; };
+  const partyMenuErr = t => { $("frErr").textContent = t; $("frErr").classList.remove("ok"); };
 
   function fbErrorText(e) {
     const c = (e && e.code) || "";
@@ -2907,7 +2898,7 @@ button, .cell { touch-action: manipulation; }
     rejoinTried = true;
     let code = null;
     try { code = sessionStorage.getItem("att-party"); } catch (e) {}
-    if (code) { settings.where = "messages"; renderMenu(); joinParty(code, true); }
+    if (code) { settings.where = "friends"; renderMenu(); joinParty(code, true); }
   }
 
   async function enterParty(code, user) {
@@ -2946,7 +2937,7 @@ button, .cell { touch-action: manipulation; }
   function partyGone(p, msg) {
     if (party !== p) return;
     leaveParty(true);
-    settings.where = "messages";
+    settings.where = "friends";
     showMenu();
     partyMenuErr(msg);
   }
@@ -3015,7 +3006,7 @@ button, .cell { touch-action: manipulation; }
     const order = u => u === d.red ? 0 : u === d.blue ? 1 : 2;
     here.sort((a, b) => order(a) - order(b) || memberName(p, a).localeCompare(memberName(p, b)));
     $("partyCount").textContent = "In the room (" + here.length + ")";
-    $("partyLede").textContent = owner ? "Your invite is in Messages. When they join, start the game."
+    $("partyLede").textContent = owner ? "Your invite has been sent. When they join, start the game."
       : "You're in " + memberName(p, d.owner) + "'s game room.";
 
     const list = $("partyMembers");
@@ -3311,7 +3302,7 @@ button, .cell { touch-action: manipulation; }
   let agame = null;                      // the anytime game on screen: { code, me, doc, unsubs }
   let asyncRejoinTried = false;
   const resultCache = new Map();
-  function asyncErr(t) { $("asyncErr").textContent = t || ""; $("dmErr").textContent = t || ""; }
+  function asyncErr(t) { $("asyncErr").textContent = t || ""; $("frErr").textContent = t || ""; $("frErr").classList.remove("ok"); }
   const newCode = () => { let c = ""; for (let j = 0; j < 5; j++) c += CODE_CHARS[(Math.random() * CODE_CHARS.length) | 0]; return c; };
 
   // Accounts always see their games (so the menu can show whose turn it is). Guests only once they open the Anytime tab.
@@ -3358,7 +3349,7 @@ button, .cell { touch-action: manipulation; }
   const both = g => !!(g.red && g.blue);
   function asyncStatus(g, uid) {
     const side = g.red === uid ? 1 : 2, n = (g.moves || []).length;
-    if (!both(g)) return (g.owner || g.red) === uid ? { k: 3, text: "Invite sent to " + (g.inviteeName || "them") + ". Waiting for them to accept." } : { k: 1, text: "Invited you. Accept it in Messages." };
+    if (!both(g)) return (g.owner || g.red) === uid ? { k: 3, text: "Invite sent to " + (g.inviteeName || "them") + ". Waiting for them to accept." } : { k: 1, text: "Invited you. Accept it in Friends." };
     if (g.done || g.resigned) {
       const w = asyncWinner(g);
       const how = g.resigned ? (g.resigned === side ? "You resigned" : "They resigned") + ". " : "";
@@ -3373,8 +3364,8 @@ button, .cell { touch-action: manipulation; }
     ul.innerHTML = "";
     const rows = l ? l.games.filter(g => !(g.hidden || []).includes(l.uid)).map(g => ({ g, st: asyncStatus(g, l.uid) })) : [];
     rows.sort((a, b) => a.st.k - b.st.k || (tms(b.g.updated) || 0) - (tms(a.g.updated) || 0));
-    $("asyncEmpty").textContent = guest ? "Unsynced games start from an invite in Messages, which needs an account."
-      : !l || !l.loaded ? "Loading your games…" : rows.length ? "" : "No unsynced games yet. To start one, invite someone in Messages.";
+    $("asyncEmpty").textContent = guest ? "Unsynced games start from an invite from a friend, and friends need an account."
+      : !l || !l.loaded ? "Loading your games…" : rows.length ? "" : "No unsynced games yet. To start one, invite a friend from Friends.";
     for (const { g, st } of rows) {
       const li = document.createElement("li");
       li.className = "k" + st.k;
@@ -3395,7 +3386,10 @@ button, .cell { touch-action: manipulation; }
       };
       if (both(g)) add(st.k === 1 ? "Play" : "Open", st.k === 1, () => openAsync(g.code));
       if (!both(g) || st.k === 4) add(both(g) ? "Remove" : "Cancel", false, () => {
-        if (!both(g)) return gref(g.code).delete().catch(e => asyncErr(fbErrorText(e)));
+        if (!both(g)) {
+          for (const iv of fr ? fr.invOut.filter(x => x.code === g.code) : []) iref(iv.id).delete().catch(() => {});
+          return gref(g.code).delete().catch(e => asyncErr(fbErrorText(e)));
+        }
         const other = side === 1 ? g.blueName : g.redName, hidden = g.hidden || [];
         if (!confirm("Remove this game from your list? " + other + " can still open it.")) return;
         // Once both players have removed it, it's deleted for good.
@@ -3407,7 +3401,6 @@ button, .cell { touch-action: manipulation; }
     }
     const mine = rows.filter(x => x.st.k === 1).length;
     $("where-async").textContent = "Unsynced" + (mine ? " (" + mine + ")" : "");
-    if (dmLastSnap && dmOpenId) renderThread(dmLastSnap);   // invites in the open conversation show the game's state
   }
 
   // Make an unsynced game for an invite. Only the invited player can join it.
@@ -3517,175 +3510,137 @@ button, .cell { touch-action: manipulation; }
     gref(a.code).update({ resigned: online.side, done: true, updated: stamp() }).catch(e => chatLine("", fbErrorText(e), false, true));
   });
 
-  // ================= Messages (DMs) =================
-  // A conversation between two accounts lives at dms/{idA_idB} (the two account ids in order),
-  // with its messages in a "msgs" list under it. Guests can't use messages.
-  const dref = id => fb.db.collection("dms").doc(id);
-  let dms = null;   // { uid, convos, loaded, unsub }
-  let dmOpenId = null, dmUnsub = null, dmLastSnap = null;
-  const dmShown = () => !$("menu").hidden && !$("dmArea").hidden;
-  const dmOther = c => c.users[0] === dms.uid ? c.users[1] : c.users[0];
-  const isUnread = c => !!(c.last && c.last.from !== dms.uid && (tms(c.last.ts) || 0) > (tms((c.read || {})[dms.uid]) || 0));
-  function dmErr(t) { $("dmErr").textContent = t || ""; }
+  // ================= Friends =================
+  // friends/{idA_idB} (the two account ids in order): a friend request ("pending", from = who asked)
+  // that becomes "friends" when the other player accepts. invites/{id}: an invite to a game between friends.
+  // Guests can't use friends.
+  const fref = id => fb.db.collection("friends").doc(id);
+  const iref = id => fb.db.collection("invites").doc(id);
+  const pairId = (a, b) => a < b ? a + "_" + b : b + "_" + a;
+  let fr = null;      // { uid, pairs, invIn, invOut, loaded, unsubs }
+  let invTo = null;   // the friend you're inviting: { uid, name }
+  function frErr(t, ok) { $("frErr").textContent = t || ""; $("frErr").classList.toggle("ok", !!ok); }
+  const otherOf = p => p.users[0] === fr.uid ? p.users[1] : p.users[0];
+  const pname2 = p => (p.names || {})[otherOf(p)] || "Player";
 
-  function watchDms() {
+  function watchFriends() {
     const u = fb && fb.auth.currentUser;
-    if (!u || u.isAnonymous || guest) { if (dms) stopDms(); return; }
-    if (dms && dms.uid === u.uid) return;
-    stopDms();
-    const d = dms = { uid: u.uid, convos: [], loaded: false, unsub: null };
-    d.unsub = fb.db.collection("dms").where("users", "array-contains", u.uid).onSnapshot(snap => {
-      if (dms !== d) return;
-      d.convos = snap.docs.map(x => Object.assign({ id: x.id }, x.data({ serverTimestamps: "estimate" })));
-      d.convos.sort((a, b) => (tms(b.updated) || 0) - (tms(a.updated) || 0));
-      d.loaded = true;
-      renderDms();
-      if (dmOpenId && dmShown()) markRead(dmOpenId);
-    }, () => { if (dms === d) { d.loaded = true; renderDms(); } });
+    if (!u || u.isAnonymous || guest) { if (fr) stopFriends(); return; }
+    if (fr && fr.uid === u.uid) return;
+    stopFriends();
+    const f = fr = { uid: u.uid, pairs: [], invIn: [], invOut: [], loaded: false, unsubs: [] };
+    const docs = snap => snap.docs.map(x => Object.assign({ id: x.id }, x.data({ serverTimestamps: "estimate" })));
+    const on = (q, fn) => f.unsubs.push(q.onSnapshot(snap => { if (fr === f) { fn(docs(snap)); renderFriends(); } },
+      e => { if (fr === f) { f.loaded = true; renderFriends(); frErr(fbErrorText(e)); } }));
+    on(fb.db.collection("friends").where("users", "array-contains", u.uid), d => { f.pairs = d; f.loaded = true; });
+    on(fb.db.collection("invites").where("to", "==", u.uid), d => { f.invIn = d; });
+    on(fb.db.collection("invites").where("from", "==", u.uid), d => { f.invOut = d; });
   }
-  function stopDms() {
-    if (dms) { try { dms.unsub && dms.unsub(); } catch (e) {} }
-    dms = null;
-    closeThread();
-    renderDms();
+  function stopFriends() {
+    if (fr) fr.unsubs.forEach(x => { try { x(); } catch (e) {} });
+    fr = null; invTo = null;
+    renderFriends();
   }
 
-  function renderDms() {
-    const unread = dms ? dms.convos.filter(isUnread).length : 0;
-    $("where-messages").textContent = "Messages" + (unread ? " (" + unread + ")" : "");
-    $("dmGuest").hidden = !guest;
-    $("dmMain").hidden = guest;
-    const ul = $("dmList");
-    ul.innerHTML = "";
-    const list = dms ? dms.convos : [];
-    $("dmEmpty").textContent = !dms || !dms.loaded ? "Loading…" : list.length ? "" : "No conversations yet. Type a username above to start one.";
-    for (const c of list) {
-      const li = document.createElement("li"), b = document.createElement("button");
-      b.type = "button";
-      b.className = isUnread(c) ? "unread" : "";
-      b.setAttribute("aria-current", c.id === dmOpenId);
-      const row = document.createElement("span"), prev = document.createElement("span");
-      row.className = "who-row"; prev.className = "prev";
-      row.textContent = (c.names || {})[dmOther(c)] || "Player";
-      prev.textContent = c.last ? (c.last.from === dms.uid ? "You: " : "") + c.last.text : "No messages yet";
-      b.append(row, prev);
-      b.addEventListener("click", () => openThread(c.id));
-      li.appendChild(b);
+  // What an invite is: "Mega live, 10 min. You'd play Blue, Red goes first."
+  function inviteDesc(iv, mine) {
+    const g = GAMES[iv.game] ? GAMES[iv.game].title : iv.game;
+    return g + (iv.kind === "live" ? " live" + (iv.timer ? ", " + iv.timer + " min" : "") : ", unsynced") + (iv.precise ? ", Precise jumps" : "") + ". " +
+      (mine ? "You play " + NAME[iv.side] : "You'd play " + NAME[3 - iv.side]) + ", " + NAME[iv.first === 2 ? 2 : 1] + " goes first.";
+  }
+
+  function renderFriends() {
+    const f = fr;
+    const incoming = f ? f.pairs.filter(p => p.status === "pending" && p.from !== f.uid) : [];
+    const count = incoming.length + (f ? f.invIn.length : 0);
+    $("where-friends").textContent = "Friends" + (count ? " (" + count + ")" : "");
+    $("frGuest").hidden = !guest;
+    $("frMain").hidden = guest;
+    if (!f) { $("frEmpty").textContent = guest ? "" : "Loading…"; $("frList").innerHTML = ""; $("frReqs").innerHTML = ""; $("invList").innerHTML = ""; $("frReqWrap").hidden = true; $("dmInvite").hidden = true; return; }
+    const row = (ul, name, desc, btns, cls) => {
+      const li = document.createElement("li"), info = document.createElement("div"), box = document.createElement("div");
+      if (cls) li.className = cls;
+      info.className = "fname"; info.textContent = name;
+      if (desc) { const d = document.createElement("span"); d.className = "fdesc"; d.textContent = desc; info.appendChild(d); }
+      box.className = "abtns";
+      for (const [text, primary, fn] of btns) {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "btn" + (primary ? " primary" : ""); b.textContent = text;
+        b.addEventListener("click", fn);
+        box.appendChild(b);
+      }
+      li.append(info, box);
       ul.appendChild(li);
+    };
+    // Friend requests: ones sent to you, then ones you sent.
+    const reqs = $("frReqs"), outgoing = f.pairs.filter(p => p.status === "pending" && p.from === f.uid);
+    reqs.innerHTML = "";
+    for (const p of incoming) row(reqs, pname2(p), "Wants to be your friend.", [["Accept", true, () => fref(p.id).update({ status: "friends", updated: stamp() }).catch(e => frErr(fbErrorText(e)))], ["Decline", false, () => fref(p.id).delete().catch(() => {})]], "in");
+    for (const p of outgoing) row(reqs, pname2(p), "Request sent.", [["Cancel", false, () => fref(p.id).delete().catch(() => {})]]);
+    $("frReqWrap").hidden = !incoming.length && !outgoing.length;
+    // Friends.
+    const list = $("frList"), friends = f.pairs.filter(p => p.status === "friends").sort((a, b) => pname2(a).localeCompare(pname2(b)));
+    list.innerHTML = "";
+    for (const p of friends) {
+      const o = { uid: otherOf(p), name: pname2(p) };
+      row(list, o.name, "", [["Invite to play", true, () => { invTo = o; frErr(""); renderFriends(); renderInvite(); $("dmInvite").scrollIntoView({ block: "nearest", behavior: "smooth" }); }],
+        ["Remove", false, () => { if (confirm("Remove " + o.name + " from your friends?")) fref(p.id).delete().catch(() => {}); }]]);
     }
-    if (dmOpenId) {
-      const c = list.find(x => x.id === dmOpenId);
-      if (c) $("dmWith").textContent = (c.names || {})[dmOther(c)] || "Player";
+    $("frEmpty").textContent = !f.loaded ? "Loading…" : friends.length ? "" : "No friends yet. Add someone by their username.";
+    // The invite panel.
+    if (invTo && !friends.some(p => otherOf(p) === invTo.uid)) invTo = null;
+    $("dmInvite").hidden = !invTo;
+    if (invTo) $("invTitle").textContent = "Invite " + invTo.name + " to play";
+    // Invites: to you, then from you.
+    const il = $("invList");
+    il.innerHTML = "";
+    const byTime = (a, b) => (tms(b.created) || 0) - (tms(a.created) || 0);
+    for (const iv of f.invIn.slice().sort(byTime)) row(il, iv.fromName + " invited you", inviteDesc(iv, false),
+      [["Accept", true, () => acceptInvite(iv)], ["Decline", false, () => dropInvite(iv)]], "in");
+    for (const iv of f.invOut.slice().sort(byTime)) {
+      const btns = [["Cancel", false, () => dropInvite(iv)]];
+      if (iv.kind === "live") btns.unshift([party && party.code === iv.code ? "Back to game room" : "Open game room", false, () => party && party.code === iv.code ? showParty() : joinParty(iv.code)]);
+      row(il, "You invited " + iv.toName, inviteDesc(iv, true) + " Waiting for them to accept.", btns);
     }
-    $("dmForm").hidden = !dmOpenId;
-    $("dmInviteBtn").hidden = !dmOpenId;
-    if (!dmOpenId) $("dmInvite").hidden = true;
+    $("invEmpty").textContent = f.invIn.length || f.invOut.length ? "" : "No invites right now. Invite a friend to play from your friends list.";
   }
 
-  function openThread(id, name) {
-    if (!dms) return;
-    if (dmOpenId !== id) {
-      closeThread();
-      dmOpenId = id; dmLastSnap = null;
-      $("dmLog").innerHTML = "";
-      $("dmInvite").hidden = true;
-      dmUnsub = dref(id).collection("msgs").orderBy("ts").limitToLast(100).onSnapshot(snap => {
-        if (dmOpenId === id) renderThread(snap);
-      }, () => {});
-    }
-    if (name) $("dmWith").textContent = name;
-    $("dmMain").classList.add("open");
-    markRead(id);
-    renderDms();
-    $("dmIn").focus({ preventScroll: true });
-  }
-  function closeThread() {
-    if (dmUnsub) { try { dmUnsub(); } catch (e) {} }
-    dmUnsub = null; dmOpenId = null; dmLastSnap = null;
-    $("dmMain").classList.remove("open");
-  }
-
-  function markRead(id) {
-    const c = dms && dms.convos.find(x => x.id === id);
-    if (c && isUnread(c)) dref(id).update({ ["read." + dms.uid]: stamp() }).catch(() => {});
-  }
-
-  const fmtTime = t => {
-    if (!t) return "";
-    const d = new Date(t), now = new Date();
-    return d.toDateString() === now.toDateString()
-      ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-      : d.toLocaleDateString([], { month: "short", day: "numeric" });
-  };
-  function renderThread(snap) {
-    dmLastSnap = snap;
-    const log = $("dmLog");
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
-    log.innerHTML = "";
-    const c = dms && dms.convos.find(x => x.id === dmOpenId);
-    if (!snap.size) {
-      const e = document.createElement("div");
-      e.className = "msg sys"; e.textContent = "No messages yet. Say hi!";
-      log.appendChild(e);
-    }
-    let lastMine = false;
-    for (const doc of snap.docs) {
-      const m = doc.data({ serverTimestamps: "estimate" });
-      lastMine = m.from === dms.uid;
-      const row = document.createElement("div"), b = document.createElement("b"), t = document.createElement("span");
-      row.className = "msg" + (lastMine ? " mine" : "");
-      b.textContent = lastMine ? username : ((c && c.names) || {})[m.from] || $("dmWith").textContent;
-      t.className = "t"; t.textContent = fmtTime(tms(m.ts));
-      row.append(b, document.createTextNode(m.text), t);
-      if (m.invite) row.appendChild(inviteBox(m.invite, lastMine));
-      log.appendChild(row);
-    }
-    if (atBottom || lastMine) log.scrollTop = log.scrollHeight;
-  }
-
-  async function startDm(raw) {
+  async function addFriend(raw) {
     const name = String(raw || "").trim();
-    dmErr("");
-    if (!dms) return dmErr("Still connecting. Try again in a moment.");
-    if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return dmErr("Usernames are 3 to 16 letters, numbers or _.");
-    $("dmStart").disabled = true;
+    frErr("");
+    if (!fr) return frErr("Still connecting. Try again in a moment.");
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return frErr("Usernames are 3 to 16 letters, numbers or _.");
+    $("frAdd").disabled = true;
     try {
       const snap = await fb.db.collection("usernames").doc(name.toLowerCase()).get();
-      if (!snap.exists) return dmErr("No account has that username.");
-      const other = snap.data();
-      if (other.uid === dms.uid) return dmErr("That's you!");
-      const users = [dms.uid, other.uid].sort(), id = users[0] + "_" + users[1];
-      const ref = dref(id);
-      if (!(await ref.get()).exists) {
-        await ref.set({ users, names: { [dms.uid]: username, [other.uid]: other.name }, last: null, read: {}, updated: stamp() });
-      }
-      $("dmTo").value = "";
-      openThread(id, other.name);
-    } catch (e) { dmErr(fbErrorText(e)); }
-    finally { $("dmStart").disabled = false; }
+      if (!snap.exists) return frErr("No account has that username.");
+      const o = snap.data();
+      if (o.uid === fr.uid) return frErr("That's you!");
+      const id = pairId(fr.uid, o.uid), cur = fr.pairs.find(p => p.id === id);
+      if (cur && cur.status === "friends") return frErr("You're already friends with " + o.name + ".");
+      if (cur && cur.from !== fr.uid) { await fref(id).update({ status: "friends", updated: stamp() }); $("frAddIn").value = ""; return frErr("You're now friends with " + o.name + ".", true); }
+      if (cur) return frErr("You've already sent " + o.name + " a friend request.");
+      await fref(id).set({ users: [fr.uid, o.uid].sort(), names: { [fr.uid]: username, [o.uid]: o.name }, from: fr.uid, status: "pending", updated: stamp() });
+      $("frAddIn").value = "";
+      frErr("Friend request sent to " + o.name + ". You'll be friends when they accept.", true);
+    } catch (e) { frErr(fbErrorText(e)); }
+    finally { $("frAdd").disabled = false; }
   }
 
-  function sendDm(id, text, invite) {
-    const me = dms.uid, batch = fb.db.batch(), msg = { from: me, text, ts: stamp() };
-    if (invite) msg.invite = invite;
-    batch.set(dref(id).collection("msgs").doc(), msg);
-    batch.update(dref(id), { last: { from: me, text: text.slice(0, 120), ts: stamp() }, updated: stamp(), ["read." + me]: stamp() });
-    return batch.commit();
+  async function acceptInvite(iv) {
+    frErr("");
+    iref(iv.id).delete().catch(() => {});
+    if (iv.kind === "unsynced") joinAsync(iv.code); else joinParty(iv.code);
   }
-  $("dmForm").addEventListener("submit", e => {
-    e.preventDefault();
-    const inp = $("dmIn"), text = inp.value.trim().slice(0, 500), id = dmOpenId;
-    if (!text || !id || !dms) return;
-    inp.value = "";
-    sendDm(id, text).catch(err => {
-      const row = document.createElement("div");
-      row.className = "msg sys"; row.textContent = "Couldn't send that message. " + fbErrorText(err);
-      $("dmLog").appendChild(row);
-    });
-  });
+  // Decline (if it's to you) or cancel (if you sent it). An unsynced game nobody joined goes too.
+  function dropInvite(iv) {
+    iref(iv.id).delete().catch(() => {});
+    if (iv.kind === "unsynced") gref(iv.code).delete().catch(() => {});
+    else if (iv.from === (fr && fr.uid) && !(party && party.code === iv.code)) pref(iv.code).delete().catch(() => {});
+  }
 
-  // ---------- Invites to play ----------
-  // Live: the inviter waits in a game room (a private party) until the other player joins.
+  // ---------- The invite panel ----------
+  // Live: the inviter waits in a game room (a private party) until their friend joins.
   // Unsynced: a saved game that shows up in Unsynced for both players once it's accepted.
   let inv = { game: "ultimate", sync: "live", timer: 0, precise: false, side: 1, first: 1 };
   try { inv = Object.assign(inv, JSON.parse(localStorage.getItem("att-invite")) || {}); } catch (e) {}
@@ -3709,8 +3664,7 @@ button, .cell { touch-action: manipulation; }
   for (const b of document.querySelectorAll("[data-iprecise]")) b.addEventListener("click", () => setInv("precise", b.dataset.iprecise === "1"));
   for (const b of document.querySelectorAll("[data-iside]")) b.addEventListener("click", () => setInv("side", +b.dataset.iside));
   for (const b of document.querySelectorAll("[data-ifirst]")) b.addEventListener("click", () => setInv("first", +b.dataset.ifirst));
-  $("dmInviteBtn").addEventListener("click", () => { $("dmInvite").hidden = !$("dmInvite").hidden; renderInvite(); });
-  $("dmInviteCancel").addEventListener("click", () => { $("dmInvite").hidden = true; });
+  $("dmInviteCancel").addEventListener("click", () => { invTo = null; renderFriends(); });
 
   // A fresh private game room for a live invite.
   async function newRoom(user, game, opts, timer, side, first) {
@@ -3727,58 +3681,28 @@ button, .cell { touch-action: manipulation; }
   }
 
   $("dmInviteSend").addEventListener("click", async () => {
-    const id = dmOpenId, c = dms && dms.convos.find(x => x.id === id);
-    if (!c) return;
-    const other = dmOther(c), otherName = (c.names || {})[other] || "them";
-    const key = AGAMES.includes(inv.game) ? inv.game : "ultimate", title = GAMES[key].title;
+    const to = invTo;
+    if (!to || !fr) return;
+    const key = AGAMES.includes(inv.game) ? inv.game : "ultimate";
     const opts = EXTRAS[key] ? { precise: !!inv.precise } : {};
-    const side = inv.side === 2 ? 2 : 1, first = inv.first === 2 ? 2 : 1;
-    const roles = " You'd play " + NAME[3 - side] + ", and " + (first === side ? "I" : "you") + " go first.";
+    const side = inv.side === 2 ? 2 : 1, first = inv.first === 2 ? 2 : 1, kind = inv.sync === "unsynced" ? "unsynced" : "live";
+    const timer = kind === "live" && [0, 10, 30, 60, 90].includes(inv.timer) ? inv.timer : 0;
     const btn = $("dmInviteSend");
-    btn.disabled = true; dmErr("");
+    btn.disabled = true; frErr("");
     try {
       const user = fb.auth.currentUser;
-      if (inv.sync === "unsynced") {
-        const code = await createUnsynced(user, key, opts, other, otherName, side, first);
-        await sendDm(id, "Invited you to an unsynced game of " + title + (opts.precise ? " (Precise jumps)" : "") + "." + roles, { kind: "unsynced", code, game: key });
-        $("dmInvite").hidden = true;
-      } else {
-        const timer = [0, 10, 30, 60, 90].includes(inv.timer) ? inv.timer : 0;
-        const code = await newRoom(user, key, opts, timer, side, first);
-        await sendDm(id, "Invited you to play " + title + " live" + (timer ? ", " + timer + " minutes" : "") + (opts.precise ? ", Precise jumps" : "") + "." + roles, { kind: "live", code, game: key });
-        $("dmInvite").hidden = true;
-        await enterParty(code, user);
-      }
-    } catch (e) { dmErr(fbErrorText(e)); }
+      const code = kind === "unsynced" ? await createUnsynced(user, key, opts, to.uid, to.name, side, first) : await newRoom(user, key, opts, timer, side, first);
+      await fb.db.collection("invites").add({ from: fr.uid, to: to.uid, fromName: username, toName: to.name, kind, code, game: key,
+        side, first, timer, precise: !!opts.precise, created: stamp() });
+      invTo = null;
+      renderFriends();
+      if (kind === "live") await enterParty(code, user);
+      else frErr("Invite sent to " + to.name + ". The game shows up in Unsynced when they accept.", true);
+    } catch (e) { frErr(fbErrorText(e)); }
     finally { btn.disabled = false; }
   });
-
-  // The box under an invite message: accept it, or see how it's going.
-  function inviteBox(iv, mine) {
-    const box = document.createElement("div"), st = document.createElement("span");
-    box.className = "inv"; st.className = "st";
-    const add = (text, primary, fn) => {
-      const x = document.createElement("button");
-      x.type = "button"; x.className = "btn" + (primary ? " primary" : ""); x.textContent = text;
-      x.addEventListener("click", fn);
-      box.appendChild(x);
-    };
-    if (iv.kind === "unsynced") {
-      const g = alist && alist.games.find(x => x.code === iv.code);
-      if (g && both(g)) { st.textContent = g.done || g.resigned ? "Finished" : "Accepted"; add("Open game", false, () => openAsync(iv.code)); }
-      else if (mine) st.textContent = g ? "Waiting for them to accept" : "Cancelled";
-      else add("Accept", true, () => joinAsync(iv.code));
-    } else {
-      const inRoom = party && party.code === iv.code;
-      add(inRoom ? "Back to the game room" : mine ? "Open game room" : "Join", !mine, () => inRoom ? showParty() : joinParty(iv.code));
-      st.textContent = "Live";
-    }
-    box.prepend(st);
-    return box;
-  }
-  $("dmNewForm").addEventListener("submit", e => { e.preventDefault(); startDm($("dmTo").value); });
-  $("dmThreadBack").addEventListener("click", () => { closeThread(); renderDms(); });
-  $("dmLogin").addEventListener("click", leaveGuest);
+  $("frAddForm").addEventListener("submit", e => { e.preventDefault(); addFriend($("frAddIn").value); });
+  $("frLogin").addEventListener("click", leaveGuest);
 
   $("partyLeave").addEventListener("click", showMenu);
   $("partyStart").addEventListener("click", startPartyGame);
