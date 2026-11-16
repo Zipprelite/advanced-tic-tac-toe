@@ -304,6 +304,8 @@ button, .cell { touch-action: manipulation; }
 .note.err:empty { display: none; }
 .note.ok { color: var(--ink); font-weight: 600; }
 #authForgot { align-self: center; }
+.guest-box { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.guest-box .btn { width: 100%; padding: 14px; font-size: 16px; border-radius: 12px; }
 .linkbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
 .extras-list { display: flex; flex-direction: column; gap: 22px; }
 .vs .extras { display: block; font-size: 13px; font-weight: 600; margin-top: 4px; }
@@ -365,6 +367,10 @@ button, .cell { touch-action: manipulation; }
       <button type="submit" class="btn primary start" id="authSubmit">Log in</button>
       <button type="button" class="linkbtn" id="authForgot">Forgot your password?</button>
     </form>
+    <div class="guest-box" id="guestBox">
+      <button type="button" class="btn" id="guestBtn">Continue as guest</button>
+      <p class="note">Play with a random name. You can make an account any time.</p>
+    </div>
   </section>
 
   <section class="setup" id="nameScreen" hidden>
@@ -1669,7 +1675,7 @@ button, .cell { touch-action: manipulation; }
     showMenu();
   });
   $("nameBack").addEventListener("click", showMenu);
-  $("changeName").addEventListener("click", () => fb ? logOut() : openName());
+  $("changeName").addEventListener("click", () => guest ? leaveGuest() : fb ? logOut() : openName());
 
   // ================= Accounts =================
   // Logins are handled by Google Firebase, which stores passwords safely.
@@ -1685,7 +1691,39 @@ button, .cell { touch-action: manipulation; }
   };
   const NO_EMAIL = "@noemail.zipprelite.github.io";
   const FB_JS = "https://www.gstatic.com/firebasejs/10.14.1/";
-  let fb = null, creating = false, authMode = "login", authBusy = false;
+  let fb = null, creating = false, authMode = "login", authBusy = false, guest = false, fbFailed = false;
+
+  // ---------- Guests ----------
+  // A guest gets a random name like "Guest Otter 42". It has spaces, which
+  // account usernames can't have, so it can never clash with a real account.
+  // This device keeps the same guest name for next time.
+  const ANIMALS = ["Otter", "Fox", "Panda", "Koala", "Falcon", "Tiger", "Wombat", "Penguin", "Gecko", "Badger",
+    "Lynx", "Puffin", "Moose", "Raven", "Walrus", "Bison", "Ferret", "Lemur", "Heron", "Possum", "Turtle", "Shark", "Owl", "Yak"];
+  const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+  const stored = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  function guestName() {
+    let n = stored("att-guest");
+    if (!n) {
+      n = "Guest " + ANIMALS[(Math.random() * ANIMALS.length) | 0] + " " + (10 + ((Math.random() * 90) | 0));
+      store("att-guest", n);
+    }
+    return n;
+  }
+  function playAsGuest() {
+    guest = true;
+    store("att-guest-on", "1");
+    username = guestName();
+    showMenu();
+  }
+  function leaveGuest() {
+    leaveOnline();
+    guest = false;
+    store("att-guest-on", null);
+    username = "";
+    if (fbFailed) { showScreen("authScreen"); showAuthLoading("Couldn't load the login service. Check your internet connection, then refresh the page.", true); }
+    else if (fb) openAuth("login");
+    else { showScreen("authScreen"); showAuthLoading("Checking your login…"); }
+  }
 
   const loadScript = src => new Promise((ok, fail) => {
     const el = document.createElement("script");
@@ -1696,27 +1734,32 @@ button, .cell { touch-action: manipulation; }
   async function initAccounts() {
     if (!FIREBASE_CONFIG) { if (!username) openName(); return; }   // accounts not set up yet
     username = "";
-    showScreen("authScreen");
-    showAuthLoading("Checking your login…");
+    if (stored("att-guest-on")) { guest = true; username = guestName(); renderMenu(); showScreen("menu"); }
+    else { showScreen("authScreen"); showAuthLoading("Checking your login…"); }
     try {
       await loadScript(FB_JS + "firebase-app-compat.js");
       await Promise.all([loadScript(FB_JS + "firebase-auth-compat.js"), loadScript(FB_JS + "firebase-firestore-compat.js")]);
       firebase.initializeApp(FIREBASE_CONFIG);
       fb = { auth: firebase.auth(), db: firebase.firestore() };
     } catch (e) {
-      showAuthLoading("Couldn't load the login service. Check your internet connection, then refresh the page.", true);
+      fbFailed = true;
+      if (!guest) showAuthLoading("Couldn't load the login service. Check your internet connection, then refresh the page.", true);
       return;
     }
-    $("changeName").textContent = "Log out";
     fb.auth.onAuthStateChanged(user => {
       if (creating) return;
-      if (!user) { username = ""; openAuth(authMode === "forgot" ? "login" : authMode); return; }
+      if (!user) {
+        if (guest) { if (!$("authScreen").hidden) openAuth(authMode); return; }
+        username = ""; openAuth(authMode === "forgot" ? "login" : authMode); return;
+      }
       if (!user.displayName) { fb.auth.signOut(); return; }   // an account that never finished being made
       signedIn(user.displayName);
     });
   }
 
   function signedIn(name) {
+    guest = false;
+    store("att-guest-on", null);
     username = name;
     if (!$("authScreen").hidden) showMenu(); else renderMenu();
   }
@@ -1759,6 +1802,7 @@ button, .cell { touch-action: manipulation; }
   }
   for (const b of document.querySelectorAll("[data-auth]")) b.addEventListener("click", () => openAuth(b.dataset.auth));
   $("authForgot").addEventListener("click", () => openAuth(authMode === "forgot" ? "login" : "forgot"));
+  $("guestBtn").addEventListener("click", playAsGuest);
 
   function authError(text, field) {
     $("authErr").textContent = text;
@@ -1856,6 +1900,7 @@ button, .cell { touch-action: manipulation; }
   // ================= Menu: this device or online =================
   function renderMenu() {
     $("whoName").textContent = username || "Player";
+    $("changeName").textContent = guest ? "Log in" : fb || FIREBASE_CONFIG ? "Log out" : "Change";
     for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
     $("menuLede").textContent = settings.where === "online"
       ? "Red against Blue, online. Pick a game to join the queue. It starts when another player joins."
