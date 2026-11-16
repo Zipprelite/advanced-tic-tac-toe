@@ -444,13 +444,13 @@ button, .cell { touch-action: manipulation; }
       </div>
       <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button></p>
     </div>
-    <div class="setup-card party-guest" id="partyGuest" hidden>
-      <span class="label">Parties need an account</span>
-      <p class="note">You're playing as a guest. Log in or create an account to make or join a party.</p>
-      <button type="button" class="btn primary start" id="partyLogin">Log in or create an account</button>
-    </div>
     <div class="party-menu" id="partyMenu" hidden>
-      <div class="setup-card">
+      <div class="setup-card" id="partyGuest" hidden>
+        <span class="label">Create a party</span>
+        <p class="note">Guests can join a party with a code. To make your own party, you need an account.</p>
+        <button type="button" class="btn start" id="partyLogin">Log in or create an account</button>
+      </div>
+      <div class="setup-card" id="partyCreateCard">
         <span class="label">Create a party</span>
         <p class="note">Get a code to send your friends. You pick the game, the extra rules and who plays.</p>
         <button type="button" class="btn primary start" id="partyCreate">Create party</button>
@@ -1881,6 +1881,7 @@ button, .cell { touch-action: manipulation; }
   }
   function leaveGuest() {
     leaveOnline();
+    if (fb && fb.auth.currentUser && fb.auth.currentUser.isAnonymous) fb.auth.signOut();
     guest = false;
     store("att-guest-on", null);
     username = "";
@@ -1916,7 +1917,11 @@ button, .cell { touch-action: manipulation; }
         if (guest) { if (!$("authScreen").hidden) openAuth(authMode); return; }
         username = ""; openAuth(authMode === "forgot" ? "login" : authMode); return;
       }
-      if (user.isAnonymous) { fb.auth.signOut(); return; }   // not used: guests don't log in
+      if (user.isAnonymous) {   // a guest's hidden login, used only for parties
+        if (!guest) { fb.auth.signOut(); return; }
+        rejoinParty();
+        return;
+      }
       if (!user.displayName) { fb.auth.signOut(); return; }   // an account that never finished being made
       signedIn(user.displayName);
       rejoinParty();
@@ -2069,8 +2074,9 @@ button, .cell { touch-action: manipulation; }
     $("changeName").textContent = guest ? "Log in" : fb || FIREBASE_CONFIG ? "Log out" : "Change";
     for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
     const partyMode = settings.where === "party";
-    $("partyMenu").hidden = !partyMode || guest;
-    $("partyGuest").hidden = !partyMode || !guest;
+    $("partyMenu").hidden = !partyMode;
+    $("partyGuest").hidden = !guest;
+    $("partyCreateCard").hidden = guest;
     document.querySelector("#menu .modes").hidden = partyMode;
     document.querySelector("#menu .labs").hidden = partyMode;
     $("menuLede").textContent = partyMode
@@ -2392,8 +2398,19 @@ button, .cell { touch-action: manipulation; }
 
   async function partyUser() {
     if (!fb) throw new Error(fbFailed ? "Couldn't load the login service. Check your internet connection." : "Still connecting. Try again in a moment.");
-    const u = fb.auth.currentUser;
-    if (guest || !u || u.isAnonymous) throw new Error("Parties are for players with accounts. Log in or create an account to join one.");
+    let u = fb.auth.currentUser;
+    if (guest) {
+      // Guests get a hidden throwaway Firebase login, just so the party knows who's who.
+      if (!u || !u.isAnonymous) {
+        try { u = (await fb.auth.signInAnonymously()).user; }
+        catch (e) {
+          if (/operation-not-allowed|admin-restricted/.test(String(e && e.code))) throw new Error("Guests can't join parties yet (guest logins are switched off in Firebase).");
+          throw e;
+        }
+      }
+      return u;
+    }
+    if (!u || u.isAnonymous) throw new Error("Log in to use parties.");
     return u;
   }
 
@@ -2401,6 +2418,7 @@ button, .cell { touch-action: manipulation; }
     partyMenuErr("");
     $("partyCreate").disabled = true;
     try {
+      if (guest) throw new Error("Making a party needs an account. Guests can join one with a code.");
       const user = await partyUser();
       for (let i = 0; i < 5; i++) {
         let code = "";

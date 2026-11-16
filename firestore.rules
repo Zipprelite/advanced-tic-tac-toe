@@ -3,10 +3,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    // Parties are for accounts only, and you must use the username you own.
+    function isGuest() { return request.auth.token.firebase.sign_in_provider == 'anonymous'; }
+    // In a party you must use the username you own, or a guest name like "Guest Otter 42".
+    // Guest names have spaces, so they can never look like an account.
     function realName(n) {
-      return n is string && n.matches('[A-Za-z0-9_]{3,16}')
-        && get(/databases/$(database)/documents/usernames/$(n.lower())).data.uid == request.auth.uid;
+      return n is string && ((isGuest() && n.matches('Guest [A-Za-z]{2,12} [0-9]{2}'))
+        || (n.matches('[A-Za-z0-9_]{3,16}')
+          && get(/databases/$(database)/documents/usernames/$(n.lower())).data.uid == request.auth.uid));
     }
 
     match /usernames/{name} {
@@ -47,7 +50,8 @@ service cloud.firestore {
           || ((b == null || a.id != b.id) && a.moves.size() == 0 && a.times.size() == 0 && a.last == request.time);
       }
       allow get: if signedIn();
-      allow create: if signedIn() && code.matches('[A-Z2-9]{5}')
+      // Only accounts can make a party; guests can join one.
+      allow create: if signedIn() && !isGuest() && code.matches('[A-Z2-9]{5}')
         && request.resource.data.owner == request.auth.uid;
       allow update: if signedIn()
         && ((isOwner() && request.resource.data.owner == resource.data.owner && matchOk()) || moveOk());
