@@ -132,7 +132,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .score .sd b { color: var(--ink); }
 
 /* Game screen: just the board, centred */
-#play { max-width: 620px; margin: 0 auto; }
+#play { max-width: 620px; margin: 0 auto; position: relative; }
 .topbar-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .app { display: flex; justify-content: center; }
 .app main { width: 100%; min-width: 0; position: relative; }
@@ -347,6 +347,10 @@ button, .cell { touch-action: manipulation; }
 @keyframes lowtime { 50% { opacity: 0.7; } }
 .play-chat { max-width: 640px; margin: 20px auto 0; }
 .play-chat .chat-log { min-height: 110px; max-height: 200px; }
+/* On wide screens the chat sits beside the board; the board stays centred. */
+.play-chat.side { position: absolute; margin: 0; gap: 0; }
+.play-chat.side .chat { height: 100%; }
+.play-chat.side .chat-log { flex: 1; min-height: 0; max-height: none; }
 .guest-box { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .guest-box .btn { width: 100%; padding: 14px; font-size: 16px; border-radius: 12px; }
 .linkbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
@@ -1626,6 +1630,24 @@ button, .cell { touch-action: manipulation; }
     board.appendChild(svg);
   }
   let resizeTimer;
+  // Put the game chat beside the board when there's room on the right; otherwise under it.
+  function placeChat() {
+    const slot = $("playChatSlot"), play = $("play"), wrap = $("board");
+    if (slot.hidden || play.hidden) return;
+    const pr = play.getBoundingClientRect(), br = wrap.getBoundingClientRect();
+    const room = document.documentElement.clientWidth - br.right - 24 - 16;
+    const side = room >= 220;
+    slot.classList.toggle("side", side);
+    slot.style.left = side ? (br.right - pr.left + 24) + "px" : "";
+    slot.style.width = side ? Math.min(room, 360) + "px" : "";
+    slot.style.top = side ? (br.top - pr.top) + "px" : "";
+    slot.style.height = side ? Math.max(br.height, 320) + "px" : "";
+  }
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => placeChat());
+    ro.observe($("play")); ro.observe(document.querySelector("#play .app"));
+  }
+  window.addEventListener("resize", () => placeChat());
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
@@ -1798,6 +1820,7 @@ button, .cell { touch-action: manipulation; }
     // Online and party games have a chat under the board.
     $("playChatSlot").hidden = !online;
     if (online) $("playChatSlot").appendChild($("chat"));
+    placeChat();
     if (online && !online.party) {
       $("chatLog").innerHTML = "";
       chatLine("", "You're playing " + online.oppName + ". Say hi!", false, true);
@@ -2697,6 +2720,7 @@ button, .cell { touch-action: manipulation; }
     startGame();
     $("playChatSlot").appendChild($("chat"));
     $("playChatSlot").hidden = false;
+    placeChat();
     online.moves = [];
     applyMoves(m.moves || []);
   }
