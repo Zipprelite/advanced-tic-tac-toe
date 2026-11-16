@@ -32,10 +32,12 @@ service cloud.firestore {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['match'])
           && after.diff(before).affectedKeys().hasOnly(['moves', 'times', 'last'])
           && request.auth.uid == mover
-          && ((after.moves.size() == k + 1 && after.moves[0:k] == before.moves && after.moves[k] is int
+          && ((after.moves.size() == k + 1 && after.moves[k] is int
+              && before.moves.concat([after.moves[k]]) == after.moves
               && after.last == request.time
               && after.times == before.times.concat([before.last.toMillis()]))
-            || (k > 0 && before.clock == 0 && after.moves == before.moves[0:k - 1]));
+            || (k > 0 && before.clock == 0 && after.moves.size() == k - 1
+              && after.moves.concat([before.moves[k - 1]]) == before.moves));
       }
       // The owner can't change a game that's being played, only start a fresh one.
       function matchOk() {
