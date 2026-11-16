@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /usernames/{name} {
+      allow get: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && name.matches('[a-z0-9_]{3,16}')
+        && request.resource.data.name.lower() == name
+        && request.resource.data.hasEmail is bool
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'hasEmail']);
+    }
+  }
+}

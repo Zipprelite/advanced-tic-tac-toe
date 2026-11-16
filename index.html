@@ -94,6 +94,9 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .setup-card .seg { background: var(--cell); border-color: transparent; }
 .setup-card .seg button { padding: 12px 8px; font-size: 15px; }
 .setup-card .seg button:hover { background: var(--cell-hover); }
+.setup-card .seg button[aria-pressed="true"]:hover { background: var(--ink); }
+.setup-card .seg .opt-red[aria-pressed="true"]:hover { background: var(--red); }
+.setup-card .seg .opt-blue[aria-pressed="true"]:hover { background: var(--blue); }
 .note { margin: 0; color: var(--muted); font-size: 14px; min-height: 1.5em; }
 .btn.start { padding: 14px; font-size: 16px; border-radius: 12px; }
 /* End-of-game: board fades, message card appears over it */
@@ -297,6 +300,10 @@ button, .cell { touch-action: manipulation; }
 .who { margin: 0; color: var(--muted); font-size: 14px; }
 .who b { color: var(--ink); }
 .linkbtn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--blue); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.note.err { color: var(--red); font-weight: 600; min-height: 0; }
+.note.err:empty { display: none; }
+.note.ok { color: var(--ink); font-weight: 600; }
+#authForgot { align-self: center; }
 .linkbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
 .extras-list { display: flex; flex-direction: column; gap: 22px; }
 .vs .extras { display: block; font-size: 13px; font-weight: 600; margin-top: 4px; }
@@ -325,6 +332,41 @@ button, .cell { touch-action: manipulation; }
 <div class="wrap">
 
   <!-- ===== Username (first visit) ===== -->
+  <section class="setup" id="authScreen" hidden>
+    <div>
+      <h1>Welcome to Advanced <span class="r">Tic</span>-<span class="b">Tac</span>-Toe</h1>
+      <p class="lede" id="authLede">Log in or create an account to play.</p>
+    </div>
+    <div class="setup-card queue-card" id="authLoading">
+      <div class="spinner" id="authSpin" aria-hidden="true"></div>
+      <p class="note" id="authLoadText">Checking your login…</p>
+    </div>
+    <form class="setup-card" id="authForm" novalidate hidden>
+      <div class="seg" role="group" aria-label="Account" id="authTabs">
+        <button type="button" id="auth-login" data-auth="login">Log in</button>
+        <button type="button" id="auth-create" data-auth="create">Create account</button>
+      </div>
+      <div class="group" id="fUser">
+        <label class="label" for="authUser" id="authUserLabel">Username or email</label>
+        <input type="text" class="text-in" id="authUser" maxlength="100" autocomplete="username" spellcheck="false" autocapitalize="off">
+        <p class="note" id="authUserNote"></p>
+      </div>
+      <div class="group" id="fPass">
+        <label class="label" for="authPass">Password</label>
+        <input type="password" class="text-in" id="authPass" maxlength="100" autocomplete="current-password">
+        <p class="note" id="authPassNote"></p>
+      </div>
+      <div class="group" id="fEmail">
+        <label class="label" for="authEmail" id="authEmailLabel">Email (optional)</label>
+        <input type="email" class="text-in" id="authEmail" maxlength="100" autocomplete="email" spellcheck="false" autocapitalize="off">
+        <p class="note" id="authEmailNote">Only used to reset your password if you forget it.</p>
+      </div>
+      <p class="note err" id="authErr" role="alert"></p>
+      <button type="submit" class="btn primary start" id="authSubmit">Log in</button>
+      <button type="button" class="linkbtn" id="authForgot">Forgot your password?</button>
+    </form>
+  </section>
+
   <section class="setup" id="nameScreen" hidden>
     <button type="button" class="btn back" id="nameBack" hidden>← Menu</button>
     <div>
@@ -1546,7 +1588,7 @@ button, .cell { touch-action: manipulation; }
   function showScreen(id) {
     gameId++; thinking = false;
     clearTimeout(zoomTimer);
-    for (const s of ["nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "play"]) $(s).hidden = s !== id;
+    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -1627,7 +1669,189 @@ button, .cell { touch-action: manipulation; }
     showMenu();
   });
   $("nameBack").addEventListener("click", showMenu);
-  $("changeName").addEventListener("click", openName);
+  $("changeName").addEventListener("click", () => fb ? logOut() : openName());
+
+  // ================= Accounts =================
+  // Logins are handled by Google Firebase, which stores passwords safely.
+  // Each username is claimed in the "usernames" list, so no two players can
+  // share one. Accounts without an email get a made-up login address.
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyB6j6keWZRS5Y678rm40w7uHCp2YGWQGwI",
+    authDomain: "advanced-tic-tac-toe-edf3d.firebaseapp.com",
+    projectId: "advanced-tic-tac-toe-edf3d",
+    storageBucket: "advanced-tic-tac-toe-edf3d.firebasestorage.app",
+    messagingSenderId: "273467654786",
+    appId: "1:273467654786:web:cca33de05be9a894b02a9b"
+  };
+  const NO_EMAIL = "@noemail.zipprelite.github.io";
+  const FB_JS = "https://www.gstatic.com/firebasejs/10.14.1/";
+  let fb = null, creating = false, authMode = "login", authBusy = false;
+
+  const loadScript = src => new Promise((ok, fail) => {
+    const el = document.createElement("script");
+    el.src = src; el.onload = ok; el.onerror = fail;
+    document.head.appendChild(el);
+  });
+
+  async function initAccounts() {
+    if (!FIREBASE_CONFIG) { if (!username) openName(); return; }   // accounts not set up yet
+    username = "";
+    showScreen("authScreen");
+    showAuthLoading("Checking your login…");
+    try {
+      await loadScript(FB_JS + "firebase-app-compat.js");
+      await Promise.all([loadScript(FB_JS + "firebase-auth-compat.js"), loadScript(FB_JS + "firebase-firestore-compat.js")]);
+      firebase.initializeApp(FIREBASE_CONFIG);
+      fb = { auth: firebase.auth(), db: firebase.firestore() };
+    } catch (e) {
+      showAuthLoading("Couldn't load the login service. Check your internet connection, then refresh the page.", true);
+      return;
+    }
+    $("changeName").textContent = "Log out";
+    fb.auth.onAuthStateChanged(user => {
+      if (creating) return;
+      if (!user) { username = ""; openAuth(authMode === "forgot" ? "login" : authMode); return; }
+      if (!user.displayName) { fb.auth.signOut(); return; }   // an account that never finished being made
+      signedIn(user.displayName);
+    });
+  }
+
+  function signedIn(name) {
+    username = name;
+    if (!$("authScreen").hidden) showMenu(); else renderMenu();
+  }
+
+  function logOut() {
+    leaveOnline();
+    $("authPass").value = "";
+    fb.auth.signOut();
+  }
+
+  function showAuthLoading(text, failed) {
+    $("authLoading").hidden = false; $("authForm").hidden = true;
+    $("authLoadText").textContent = text;
+    $("authSpin").hidden = !!failed;
+  }
+
+  function openAuth(mode) {
+    authMode = mode;
+    if ($("authScreen").hidden) showScreen("authScreen");
+    $("authLoading").hidden = true; $("authForm").hidden = false;
+    const create = mode === "create", forgot = mode === "forgot";
+    for (const b of document.querySelectorAll("[data-auth]")) b.setAttribute("aria-pressed", b.dataset.auth === mode);
+    $("authTabs").hidden = forgot;
+    $("fUser").hidden = forgot;
+    $("fPass").hidden = forgot;
+    $("fEmail").hidden = mode === "login";
+    $("authUserLabel").textContent = create ? "Username" : "Username or email";
+    $("authUser").setAttribute("autocomplete", create ? "off" : "username");
+    $("authUserNote").textContent = create ? "3 to 16 letters, numbers or _. Other players see it, and no one else can have it." : "";
+    $("authPass").setAttribute("autocomplete", create ? "new-password" : "current-password");
+    $("authPassNote").textContent = create ? "At least 6 characters." : "";
+    $("authEmailLabel").textContent = forgot ? "Email" : "Email (optional)";
+    $("authEmailNote").textContent = forgot ? "Only works if you added an email when you made your account." : "Only used to reset your password if you forget it.";
+    $("authSubmit").textContent = create ? "Create account" : forgot ? "Send reset link" : "Log in";
+    $("authForgot").textContent = forgot ? "Back to log in" : "Forgot your password?";
+    $("authForgot").hidden = create;
+    $("authLede").textContent = forgot ? "We'll email you a link to pick a new password." : "Log in or create an account to play.";
+    authError("");
+    $("authErr").classList.remove("ok");
+  }
+  for (const b of document.querySelectorAll("[data-auth]")) b.addEventListener("click", () => openAuth(b.dataset.auth));
+  $("authForgot").addEventListener("click", () => openAuth(authMode === "forgot" ? "login" : "forgot"));
+
+  function authError(text, field) {
+    $("authErr").textContent = text;
+    $("authErr").classList.remove("ok");
+    if (field) $(field).focus();
+  }
+
+  function authErrorText(e) {
+    const c = (e && e.code) || "";
+    if (c.includes("network")) return "Couldn't reach the login service. Check your internet connection.";
+    if (c.includes("too-many-requests")) return "Too many tries. Wait a few minutes, then try again.";
+    if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") || c.includes("invalid-login")) return "Wrong username or password.";
+    if (c.includes("invalid-email")) return "That email address doesn't look right.";
+    if (c.includes("weak-password")) return "Pick a longer password (at least 6 characters).";
+    return "Something went wrong. Try again.";
+  }
+
+  const nameDoc = key => fb.db.collection("usernames").doc(key);
+
+  $("authForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    if (authBusy || !fb) return;
+    const id = $("authUser").value.trim(), pass = $("authPass").value, email = $("authEmail").value.trim();
+    authBusy = true; $("authSubmit").disabled = true;
+    try {
+      if (authMode === "create") await createAccount(id, pass, email);
+      else if (authMode === "forgot") await resetPassword(email);
+      else await logIn(id, pass);
+    } finally {
+      authBusy = false; $("authSubmit").disabled = false;
+    }
+  });
+
+  async function logIn(id, pass) {
+    if (!id) return authError("Type your username or email.", "authUser");
+    if (!pass) return authError("Type your password.", "authPass");
+    let email = id;
+    if (!id.includes("@")) {
+      const key = id.toLowerCase();
+      if (!/^[a-z0-9_]{3,16}$/.test(key)) return authError("No account has that username.", "authUser");
+      try {
+        const snap = await nameDoc(key).get();
+        if (!snap.exists) return authError("No account has that username.", "authUser");
+        if (snap.data().hasEmail) return authError("This account logs in with its email address. Type your email instead.", "authUser");
+      } catch (err) { return authError(authErrorText(err)); }
+      email = key + NO_EMAIL;
+    }
+    try { await fb.auth.signInWithEmailAndPassword(email, pass); }
+    catch (err) { authError(authErrorText(err), "authPass"); }
+  }
+
+  async function createAccount(name, pass, email) {
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return authError("Usernames are 3 to 16 letters, numbers or _ (no spaces).", "authUser");
+    if (pass.length < 6) return authError("Pick a password with at least 6 characters.", "authPass");
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return authError("That email address doesn't look right.", "authEmail");
+    const key = name.toLowerCase(), ref = nameDoc(key);
+    try {
+      if ((await ref.get()).exists) return authError("Someone already has that username. Pick another.", "authUser");
+    } catch (err) { return authError(authErrorText(err)); }
+    creating = true;
+    let cred;
+    try { cred = await fb.auth.createUserWithEmailAndPassword(email || key + NO_EMAIL, pass); }
+    catch (err) {
+      creating = false;
+      const c = (err && err.code) || "";
+      if (c.includes("email-already-in-use")) return email
+        ? authError("That email already has an account. Log in instead.", "authEmail")
+        : authError("Someone already has that username. Pick another.", "authUser");
+      return authError(authErrorText(err));
+    }
+    try {
+      // Claim the username. This fails if someone else claimed it first.
+      await ref.set({ uid: cred.user.uid, name, hasEmail: !!email });
+      await cred.user.updateProfile({ displayName: name });
+    } catch (err) {
+      try { await cred.user.delete(); } catch (e2) { try { await fb.auth.signOut(); } catch (e3) {} }
+      creating = false;
+      return authError(((err && err.code) || "").includes("permission")
+        ? "Someone already has that username. Pick another." : authErrorText(err), "authUser");
+    }
+    creating = false;
+    $("authPass").value = "";
+    signedIn(name);
+  }
+
+  async function resetPassword(email) {
+    if (!email) return authError("Type the email you made your account with.", "authEmail");
+    try {
+      await fb.auth.sendPasswordResetEmail(email);
+      $("authErr").textContent = "If that email has an account, a reset link is on its way. Check your inbox (and spam folder).";
+      $("authErr").classList.add("ok");
+    } catch (err) { authError(authErrorText(err), "authEmail"); }
+  }
 
   // ================= Menu: this device or online =================
   function renderMenu() {
@@ -1995,7 +2219,7 @@ button, .cell { touch-action: manipulation; }
 
   // ---------- Start ----------
   renderMenu();
-  if (!username) openName();
+  initAccounts();
 })();
 </script>
 </body>
