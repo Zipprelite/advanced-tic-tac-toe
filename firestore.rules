@@ -22,16 +22,20 @@ service cloud.firestore {
     match /parties/{code} {
       function isOwner() { return request.auth.uid == resource.data.owner; }
       // Only the player whose turn it is can add one move, or take back the last one.
+      // Each move records the server's time for the clocks, so nobody can fake it.
+      // Timed games have no undo.
       function moveOk() {
         let before = resource.data.match;
         let after = request.resource.data.match;
         let k = before.moves.size();
         let mover = k % 2 == 0 ? before.red : before.blue;
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['match'])
-          && after.diff(before).affectedKeys().hasOnly(['moves'])
+          && after.diff(before).affectedKeys().hasOnly(['moves', 'times', 'last'])
           && request.auth.uid == mover
-          && ((after.moves.size() == k + 1 && after.moves[0:k] == before.moves && after.moves[k] is int)
-            || (k > 0 && after.moves == before.moves[0:k - 1]));
+          && ((after.moves.size() == k + 1 && after.moves[0:k] == before.moves && after.moves[k] is int
+              && after.last == request.time
+              && after.times == before.times.concat([before.last.toMillis()]))
+            || (k > 0 && before.clock == 0 && after.moves == before.moves[0:k - 1]));
       }
       allow get: if signedIn();
       allow create: if signedIn() && code.matches('[A-Z2-9]{5}')

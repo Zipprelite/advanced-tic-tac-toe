@@ -337,6 +337,14 @@ button, .cell { touch-action: manipulation; }
 .msg.sys { color: var(--muted); font-style: italic; }
 .chat-form { display: flex; gap: 8px; }
 .chat-form .text-in { flex: 1; min-width: 0; }
+.clocks { display: flex; justify-content: center; gap: 12px; margin: -4px 0 14px; }
+.clock { font: 700 22px var(--font-display); font-variant-numeric: tabular-nums; padding: 6px 16px; border-radius: 10px; background: var(--surface); border: 2px solid var(--line); min-width: 7.5em; text-align: center; }
+.clock small { display: block; font: 600 12px var(--font-body); color: var(--muted); }
+.clock.r.on { border-color: var(--red); background: var(--red); color: #fff; }
+.clock.b.on { border-color: var(--blue); background: var(--blue); color: #fff; }
+.clock.on small { color: rgba(255,255,255,0.85); }
+.clock.low.on { animation: lowtime 1s steps(2) infinite; }
+@keyframes lowtime { 50% { opacity: 0.7; } }
 .play-chat { max-width: 640px; margin: 20px auto 0; }
 .play-chat .chat-log { min-height: 110px; max-height: 200px; }
 .guest-box { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
@@ -600,6 +608,17 @@ button, .cell { touch-action: manipulation; }
               <button type="button" data-pgame="cube">3D Cube</button>
             </div>
           </div>
+          <div class="group">
+            <span class="label" id="ptLabel">Timer</span>
+            <div class="seg" id="partyTimers" role="group" aria-labelledby="ptLabel">
+              <button type="button" data-ptimer="0">Off</button>
+              <button type="button" data-ptimer="10">10 min</button>
+              <button type="button" data-ptimer="30">30 min</button>
+              <button type="button" data-ptimer="60">60 min</button>
+              <button type="button" data-ptimer="90">90 min</button>
+            </div>
+            <p class="note" id="partyTimerNote"></p>
+          </div>
           <div class="extras-list" id="partyExtras"></div>
           <p class="note" id="partyStartNote"></p>
           <button type="button" class="btn primary start" id="partyStart">Start game</button>
@@ -648,6 +667,10 @@ button, .cell { touch-action: manipulation; }
       </div>
     </div>
     <p class="vs" id="vsLine" hidden></p>
+    <div class="clocks" id="clocks" hidden>
+      <div class="clock r" id="clock1"><small id="clockName1">Red</small><span id="clockTime1">0:00</span></div>
+      <div class="clock b" id="clock2"><small id="clockName2">Blue</small><span id="clockTime2">0:00</span></div>
+    </div>
 
     <div class="app">
       <main>
@@ -1506,7 +1529,8 @@ button, .cell { touch-action: manipulation; }
       $("endMenu").textContent = online && online.party ? "Back to party" : "Menu";
       if (online && online.party) {
         endNew.hidden = true;
-        endText.textContent = leftMid ? "Wait for them to come back, or go back to the party." : "The party owner can start the next game.";
+        endText.textContent = leftMid ? "Wait for them to come back, or go back to the party."
+          : (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + "The party owner can start the next game.";
       } else if (online) {
         if (online.left) { endText.textContent = leftMid ? "The game has ended." : online.oppName + " left the game."; endNew.hidden = true; }
         else if (online.myReq) { endText.textContent = "Waiting for " + online.oppName + " to accept…"; endNew.disabled = true; }
@@ -1523,7 +1547,7 @@ button, .cell { touch-action: manipulation; }
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
       main.textContent = NAME[s.winner] + " wins.";
-      sub.textContent = (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : pname(s.winner) + " wins.")
+      sub.textContent = (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : pname(s.winner) + " wins.")
         : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "");
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
@@ -1536,7 +1560,7 @@ button, .cell { touch-action: manipulation; }
 
     $("undoBtn").disabled = thinking || !canUndo();
     $("restartBtn").hidden = !!online || settings.opp !== "2p";
-    $("undoBtn").hidden = !!online && !online.side;   // people watching a party game can't undo
+    $("undoBtn").hidden = !!online && (!online.side || !!online.clock);   // no undo when watching, or in timed games
     $("menuBtn").textContent = online && online.party ? "← Party" : "← Menu";
     const vs = $("vsLine");
     vs.hidden = !online;
@@ -1617,6 +1641,7 @@ button, .cell { touch-action: manipulation; }
   function canUndo() {
     if (!history.length) return false;
     // Online: only the player whose turn it is can undo the other player's last move.
+    if (online && online.party && online.clock) return false;   // timed games have no undo
     if (online) return !online.left && !state.winner && state.turn === online.side;
     if (settings.opp !== "ai") return true;
     return history.some(h => h.turn === settings.side);
@@ -1770,8 +1795,28 @@ button, .cell { touch-action: manipulation; }
     if (G !== Cube) $("floorBar").hidden = true;
     $("gameTitle").textContent = G.title;
     $("play").classList.toggle("wide", G === Supreme);
+    // Online and party games have a chat under the board.
+    $("playChatSlot").hidden = !online;
+    if (online) $("playChatSlot").appendChild($("chat"));
+    if (online && !online.party) {
+      $("chatLog").innerHTML = "";
+      chatLine("", "You're playing " + online.oppName + ". Say hi!", false, true);
+    }
     showScreen("play");
     newGame();
+  }
+
+  // Adds one line to the chat box.
+  function chatLine(name, text, mine, sys) {
+    const log = $("chatLog");
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    const row = document.createElement("div");
+    row.className = "msg" + (mine ? " mine" : "") + (sys ? " sys" : "");
+    if (name) { const b = document.createElement("b"); b.textContent = name; row.appendChild(b); }
+    row.appendChild(document.createTextNode(text));
+    log.appendChild(row);
+    while (log.children.length > 150) log.firstChild.remove();
+    if (atBottom || mine) log.scrollTop = log.scrollHeight;
   }
 
   function showMenu() { leaveOnline(); renderMenu(); showScreen("menu"); }
@@ -2299,10 +2344,13 @@ button, .cell { touch-action: manipulation; }
       if (state.winner || state.turn === online.side || d.n !== history.length) return;
       state = history.pop();
       render();
+    } else if (d.t === "chat") {
+      if (typeof d.text === "string" && d.text.trim()) chatLine(online.oppName, d.text.trim().slice(0, 300), false);
     } else if (d.t === "rematch") {
       online.theirReq = true;
       checkRematch();
     } else if (d.t === "bye") {
+      if (!online.left) chatLine("", online.oppName + " left the game.", false, true);
       online.left = true;
       render();
     }
@@ -2454,7 +2502,8 @@ button, .cell { touch-action: manipulation; }
   function onPartyDoc(p, snap) {
     if (party !== p) return;
     if (!snap.exists) return partyGone(p, "The party was closed by its owner.");
-    p.doc = snap.data();
+    p.doc = snap.data({ serverTimestamps: "estimate" });
+    noteServerTime(p, snap);
     const first = p.firstDoc;
     p.firstDoc = false;
     tidyRoles(p);
@@ -2544,6 +2593,12 @@ button, .cell { touch-action: manipulation; }
       b.setAttribute("aria-pressed", String(b.dataset.pgame === d.game));
       b.disabled = !owner;
     }
+    const mins = d.timer || 0;
+    for (const b of document.querySelectorAll("[data-ptimer]")) {
+      b.setAttribute("aria-pressed", String(+b.dataset.ptimer === mins));
+      b.disabled = !owner;
+    }
+    $("partyTimerNote").textContent = mins ? "Each player gets " + mins / 2 + " minutes. Run out and you lose. No undo in timed games." : "No time limit.";
     const ex = $("partyExtras");
     ex.innerHTML = "";
     const extras = EXTRAS[d.game] || [];
@@ -2596,7 +2651,8 @@ button, .cell { touch-action: manipulation; }
     for (const x of EXTRAS[d.game] || []) opts[x.key] = !!(d.opts || {})[x.key];
     pref(p.code).update({
       match: { id: newId(), game: d.game, opts, red: d.red, blue: d.blue,
-        redName: memberName(p, d.red), blueName: memberName(p, d.blue), moves: [] }
+        redName: memberName(p, d.red), blueName: memberName(p, d.blue), moves: [],
+        times: [], last: stamp(), clock: (d.timer || 0) * 30000 }
     }).catch(e => { $("partyStartNote").textContent = fbErrorText(e); });
   }
 
@@ -2610,7 +2666,7 @@ button, .cell { touch-action: manipulation; }
     if (!online || !online.party || online.matchId !== m.id) {
       const side = m.red === p.me ? 1 : m.blue === p.me ? 2 : 0;
       online = { party: true, matchId: m.id, side, names: { 1: m.redName, 2: m.blueName },
-        oppName: side === 1 ? m.blueName : m.redName, opts: m.opts || {}, started: true, left: false, leftName: "", moves: [] };
+        oppName: side === 1 ? m.blueName : m.redName, opts: m.opts || {}, clock: m.clock || 0, started: true, left: false, leftName: "", moves: [] };
       if (!first) return openPartyGame();   // a new game started: everyone goes to it
     }
     if (!$("play").hidden) applyMoves(m.moves || []);
@@ -2628,13 +2684,20 @@ button, .cell { touch-action: manipulation; }
   }
 
   function applyMoves(ms) {
+    const m = party && party.doc && party.doc.match;
+    const ci = m ? clockInfo(m, serverNow()) : null;
+    if (ci && ci.flagged && ci.at < ms.length) ms = ms.slice(0, ci.at);   // moves after running out don't count
     const cur = online.moves;
     const prefix = cur.length <= ms.length && cur.every((v, i) => v === ms[i]);
-    if (prefix && cur.length === ms.length) return render();
-    if (prefix && ms.length === cur.length + 1 && G.legal(state).includes(ms[cur.length])) {
-      const m = ms[cur.length];
-      history.push(G.clone(state)); G.apply(state, m); online.moves = ms.slice();
-      return render(m);
+    const flag = () => {
+      if (ci && ci.flagged && !state.winner) { state.winner = 3 - ci.flagged; state.timeout = ci.flagged; state.line = null; }
+    };
+    if (prefix && cur.length === ms.length) { flag(); return render(); }
+    if (prefix && ms.length === cur.length + 1 && !state.timeout && G.legal(state).includes(ms[cur.length])) {
+      const mv = ms[cur.length];
+      history.push(G.clone(state)); G.apply(state, mv); online.moves = ms.slice();
+      flag();
+      return render(mv);
     }
     // An undo (or a jump of several moves): replay the game from the start.
     state = G.newState();
@@ -2644,13 +2707,76 @@ button, .cell { touch-action: manipulation; }
       if (state.winner || !G.legal(state).includes(m)) break;
       history.push(G.clone(state)); G.apply(state, m); online.moves.push(m);
     }
+    flag();
     render();
   }
 
+  // Each move also records the server's time, which the clocks are worked out from.
   function partyMoves(ms) {
     if (!party || !online || !online.party) return;
-    pref(party.code).update({ "match.moves": ms }).catch(() => {});
+    const k = online.moves.length, m = party.doc && party.doc.match;
+    if (!m) return;
+    const upd = { "match.moves": ms };
+    if (ms.length === k + 1) {
+      // times[i] is when move i's turn began; last is when the latest move was made.
+      upd["match.times"] = (m.times || []).concat(tms(m.last));
+      upd["match.last"] = firebase.firestore.FieldValue.serverTimestamp();
+    } else if (ms.length !== k - 1) return;
+    pref(party.code).update(upd).catch(() => {});
   }
+
+  // ---------- Chess clocks ----------
+  // Each player gets half the game's time. The clock of the player whose turn
+  // it is runs. Times come from Firebase's server, so changing your computer's
+  // clock doesn't help. Everyone works out the same result from the same times.
+  let serverOffset = 0;
+  const serverNow = () => Date.now() + serverOffset;
+  const tms = v => v && v.toMillis ? v.toMillis() : null;
+  function noteServerTime(p, snap) {
+    const m = p.doc && p.doc.match;
+    if (!m || snap.metadata.hasPendingWrites) return;
+    const latest = tms(m.last);
+    if (latest && latest !== p.lastServerT) { p.lastServerT = latest; serverOffset = latest - Date.now(); }
+  }
+  // Time used by each side, and whether someone ran out (and on which move).
+  function clockInfo(m, now) {
+    const clock = (m && m.clock) || 0;
+    if (!clock) return null;
+    const used = { 1: 0, 2: 0 }, ms = m.moves || [], starts = m.times || [];
+    const last = tms(m.last) || now;
+    for (let i = 0; i < ms.length; i++) {
+      const side = i % 2 === 0 ? 1 : 2, end = i + 1 < ms.length ? starts[i + 1] : last;
+      used[side] += end - (starts[i] || end);
+      if (used[side] > clock) return { clock, used, flagged: side, at: i, last, running: 0 };
+    }
+    const running = ms.length % 2 === 0 ? 1 : 2;
+    used[running] += Math.max(0, now - last);
+    return { clock, used, flagged: used[running] > clock ? running : 0, at: ms.length, last, running };
+  }
+  const fmtClock = ms => {
+    ms = Math.max(0, ms);
+    if (ms < 10000) return (Math.floor(ms / 100) / 10).toFixed(1);
+    const sec = Math.ceil(ms / 1000);
+    return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+  };
+  function tickClock() {
+    const m = online && online.party && party && party.doc && party.doc.match;
+    const ci = m && !$("play").hidden && m.id === online.matchId ? clockInfo(m, serverNow()) : null;
+    $("clocks").hidden = !ci;
+    if (!ci) return;
+    const over = !!state.winner;
+    for (const side of [1, 2]) {
+      const left = ci.clock - ci.used[side];
+      $("clockTime" + side).textContent = over && state.timeout === side ? "0:00" : fmtClock(left);
+      $("clockName" + side).textContent = online.names[side];
+      const on = !over && ci.running === side;
+      $("clock" + side).classList.toggle("on", on);
+      $("clock" + side).classList.toggle("low", left < 30000);
+    }
+    // The player to move just ran out of time.
+    if (!over && ci.flagged) { state.winner = 3 - ci.flagged; state.timeout = ci.flagged; state.line = null; render(); }
+  }
+  setInterval(tickClock, 200);
 
   // ---------- Chat ----------
   function onChat(p, snap) {
@@ -2679,7 +2805,14 @@ button, .cell { touch-action: manipulation; }
   $("chatForm").addEventListener("submit", e => {
     e.preventDefault();
     const inp = $("chatIn"), text = inp.value.trim().slice(0, 300);
-    if (!text || !party) return;
+    if (!text) return;
+    if (online && !online.party) {
+      inp.value = "";
+      if (online.left) return chatLine("", online.oppName + " has left, so they won't see messages.", false, true);
+      send({ t: "chat", text });
+      return chatLine(username, text, true);
+    }
+    if (!party) return;
     inp.value = "";
     pref(party.code).collection("chat").add({ uid: party.me, name: username, text, ts: stamp() }).catch(() => {
       const row = document.createElement("div");
@@ -2699,6 +2832,9 @@ button, .cell { touch-action: manipulation; }
     if (!party) return;
     const done = () => { $("partyCopy").textContent = "Copied!"; setTimeout(() => { $("partyCopy").textContent = "Copy code"; }, 1500); };
     if (navigator.clipboard) navigator.clipboard.writeText(party.code).then(done, () => {});
+  });
+  for (const b of document.querySelectorAll("[data-ptimer]")) b.addEventListener("click", () => {
+    if (party && party.doc && party.doc.owner === party.me) pref(party.code).update({ timer: +b.dataset.ptimer }).catch(() => {});
   });
   for (const b of document.querySelectorAll("[data-pgame]")) b.addEventListener("click", () => {
     if (party && party.doc && party.doc.owner === party.me) pref(party.code).update({ game: b.dataset.pgame }).catch(() => {});
