@@ -1,6 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    // Parties are for accounts only, and you must use the username you own.
+    function realName(n) {
+      return n is string && n.matches('[A-Za-z0-9_]{3,16}')
+        && get(/databases/$(database)/documents/usernames/$(n.lower())).data.uid == request.auth.uid;
+    }
+
     match /usernames/{name} {
       allow get: if true;
       allow create: if request.auth != null
@@ -9,6 +17,51 @@ service cloud.firestore {
         && request.resource.data.name.lower() == name
         && request.resource.data.hasEmail is bool
         && request.resource.data.keys().hasOnly(['uid', 'name', 'hasEmail']);
+    }
+
+    match /parties/{code} {
+      function isOwner() { return request.auth.uid == resource.data.owner; }
+      // Only the player whose turn it is can add one move, or take back the last one.
+      function moveOk() {
+        let before = resource.data.match;
+        let after = request.resource.data.match;
+        let k = before.moves.size();
+        let mover = k % 2 == 0 ? before.red : before.blue;
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['match'])
+          && after.diff(before).affectedKeys().hasOnly(['moves'])
+          && request.auth.uid == mover
+          && ((after.moves.size() == k + 1 && after.moves[0:k] == before.moves && after.moves[k] is int)
+            || (k > 0 && after.moves == before.moves[0:k - 1]));
+      }
+      allow get: if signedIn();
+      allow create: if signedIn() && code.matches('[A-Z2-9]{5}')
+        && request.resource.data.owner == request.auth.uid;
+      allow update: if signedIn()
+        && ((isOwner() && request.resource.data.owner == resource.data.owner) || moveOk());
+      allow delete: if signedIn() && isOwner();
+
+      match /members/{uid} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && uid == request.auth.uid
+          && exists(/databases/$(database)/documents/parties/$(code))
+          && request.resource.data.keys().hasOnly(['name', 'seen'])
+          && realName(request.resource.data.name);
+        allow delete: if signedIn() && (uid == request.auth.uid
+          || get(/databases/$(database)/documents/parties/$(code)).data.owner == request.auth.uid);
+      }
+
+      match /chat/{id} {
+        allow read: if signedIn()
+          && exists(/databases/$(database)/documents/parties/$(code)/members/$(request.auth.uid));
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'ts'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.name == get(/databases/$(database)/documents/parties/$(code)/members/$(request.auth.uid)).data.name
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 300
+          && request.resource.data.ts == request.time;
+      }
     }
   }
 }

@@ -304,6 +304,41 @@ button, .cell { touch-action: manipulation; }
 .note.err:empty { display: none; }
 .note.ok { color: var(--ink); font-weight: 600; }
 #authForgot { align-self: center; }
+/* Parties */
+.party-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.party-menu .setup-card { gap: 14px; }
+.party-menu .err { grid-column: 1 / -1; }
+@media (max-width: 640px) { .party-menu { grid-template-columns: 1fr; } }
+.party-guest { gap: 12px; max-width: 520px; }
+.code-in { text-transform: uppercase; letter-spacing: 0.25em; font-weight: 700; text-align: center; font-size: 20px; }
+.party { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.party .btn.back { align-self: flex-start; }
+.code-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.party-code { font: 800 clamp(38px, 8vw, 58px) var(--font-display); letter-spacing: 0.12em; line-height: 1; }
+.party .lede { color: var(--muted); font-size: 16px; margin: 8px 0 0; }
+.party-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .party-grid { grid-template-columns: 1fr; } }
+.party-main { display: flex; flex-direction: column; gap: 18px; }
+.members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.members li { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; padding: 8px 10px; background: var(--cell); border-radius: 10px; }
+.members .mname { font-weight: 700; flex: 1; min-width: 6em; overflow-wrap: anywhere; }
+.members .tag { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 6px; }
+.members .role { font-size: 13px; font-weight: 700; color: var(--muted); }
+.members .role.r { color: var(--red); }
+.members .role.b { color: var(--blue); }
+.members .seg { background: var(--surface); }
+.members .seg button { padding: 6px 10px; font-size: 13px; }
+.members .kick { padding: 6px 10px; font-size: 13px; }
+.chat { display: flex; flex-direction: column; gap: 10px; }
+.chat-log { min-height: 240px; max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--cell); border-radius: 10px; }
+.msg { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.msg b { margin-right: 6px; }
+.msg.mine b { color: var(--blue); }
+.msg.sys { color: var(--muted); font-style: italic; }
+.chat-form { display: flex; gap: 8px; }
+.chat-form .text-in { flex: 1; min-width: 0; }
+.play-chat { max-width: 640px; margin: 20px auto 0; }
+.play-chat .chat-log { min-height: 110px; max-height: 200px; }
 .guest-box { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .guest-box .btn { width: 100%; padding: 14px; font-size: 16px; border-radius: 12px; }
 .linkbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
@@ -397,8 +432,27 @@ button, .cell { touch-action: manipulation; }
       <div class="seg where" role="group" aria-label="Where to play">
         <button type="button" id="where-local" data-where="local">This device</button>
         <button type="button" id="where-online" data-where="online">Online</button>
+        <button type="button" id="where-party" data-where="party">Party</button>
       </div>
       <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button></p>
+    </div>
+    <div class="setup-card party-guest" id="partyGuest" hidden>
+      <span class="label">Parties need an account</span>
+      <p class="note">You're playing as a guest. Log in or create an account to make or join a party.</p>
+      <button type="button" class="btn primary start" id="partyLogin">Log in or create an account</button>
+    </div>
+    <div class="party-menu" id="partyMenu" hidden>
+      <div class="setup-card">
+        <span class="label">Create a party</span>
+        <p class="note">Get a code to send your friends. You pick the game, the extra rules and who plays.</p>
+        <button type="button" class="btn primary start" id="partyCreate">Create party</button>
+      </div>
+      <form class="setup-card" id="partyJoinForm" novalidate>
+        <label class="label" for="partyCodeIn">Join a party</label>
+        <input type="text" class="text-in code-in" id="partyCodeIn" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE">
+        <button type="submit" class="btn start" id="partyJoin">Join party</button>
+      </form>
+      <p class="note err" id="partyMenuErr" role="alert"></p>
     </div>
     <div class="modes">
       <div class="mode-col">
@@ -517,6 +571,54 @@ button, .cell { touch-action: manipulation; }
     </div>
   </section>
 
+  <section class="party" id="partyScreen" hidden>
+    <button type="button" class="btn back" id="partyLeave">← Leave party</button>
+    <div>
+      <span class="label">Party code</span>
+      <div class="code-row">
+        <span class="party-code" id="partyCode">-----</span>
+        <button type="button" class="btn back" id="partyCopy">Copy code</button>
+      </div>
+      <p class="lede" id="partyLede">Send this code to your friends so they can join.</p>
+    </div>
+    <div class="party-grid">
+      <div class="party-main">
+        <div class="setup-card">
+          <div class="group">
+            <span class="label" id="partyCount">Players</span>
+            <ul class="members" id="partyMembers"></ul>
+            <p class="note" id="partyMembersNote"></p>
+          </div>
+        </div>
+        <div class="setup-card">
+          <div class="group">
+            <span class="label" id="pgLabel">Game</span>
+            <div class="seg" id="partyGames" role="group" aria-labelledby="pgLabel">
+              <button type="button" data-pgame="normal">Normal</button>
+              <button type="button" data-pgame="ultimate">Ultimate</button>
+              <button type="button" data-pgame="supreme">Supreme</button>
+              <button type="button" data-pgame="cube">3D Cube</button>
+            </div>
+          </div>
+          <div class="extras-list" id="partyExtras"></div>
+          <p class="note" id="partyStartNote"></p>
+          <button type="button" class="btn primary start" id="partyStart">Start game</button>
+          <button type="button" class="btn start" id="partyGoGame" hidden>Go to the game</button>
+        </div>
+      </div>
+      <div class="setup-card" id="partyChatSlot">
+        <div class="chat" id="chat">
+          <span class="label">Chat</span>
+          <div class="chat-log" id="chatLog" aria-live="polite"></div>
+          <form class="chat-form" id="chatForm" novalidate>
+            <input type="text" class="text-in" id="chatIn" maxlength="300" autocomplete="off" placeholder="Say something…" aria-label="Chat message">
+            <button type="submit" class="btn primary">Send</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="setup" id="queueScreen" hidden>
     <div>
       <span class="label">Online</span>
@@ -573,6 +675,7 @@ button, .cell { touch-action: manipulation; }
         </div>
       </main>
     </div>
+    <div class="setup-card play-chat" id="playChatSlot" hidden></div>
   </section>
 </div>
 
@@ -1397,10 +1500,14 @@ button, .cell { touch-action: manipulation; }
       const card = endOv.firstElementChild;
       const endNew = $("endNew"), endText = $("endText");
       card.className = "endcard" + (s.winner === 1 || s.winner === 2 ? " w" + s.winner : "");
-      $("endTitle").textContent = leftMid ? online.oppName + " left." : s.winner === 3 ? "It's a draw." : NAME[s.winner] + " wins.";
+      $("endTitle").textContent = leftMid ? (online.leftName || online.oppName) + " left." : s.winner === 3 ? "It's a draw." : NAME[s.winner] + " wins.";
       endNew.hidden = false; endNew.disabled = false; endNew.textContent = "New game";
       endText.textContent = "New game?";
-      if (online) {
+      $("endMenu").textContent = online && online.party ? "Back to party" : "Menu";
+      if (online && online.party) {
+        endNew.hidden = true;
+        endText.textContent = leftMid ? "Wait for them to come back, or go back to the party." : "The party owner can start the next game.";
+      } else if (online) {
         if (online.left) { endText.textContent = leftMid ? "The game has ended." : online.oppName + " left the game."; endNew.hidden = true; }
         else if (online.myReq) { endText.textContent = "Waiting for " + online.oppName + " to accept…"; endNew.disabled = true; }
         else if (online.theirReq) { endText.textContent = online.oppName + " wants a rematch."; endNew.textContent = "Accept"; }
@@ -1416,11 +1523,11 @@ button, .cell { touch-action: manipulation; }
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
       main.textContent = NAME[s.winner] + " wins.";
-      sub.textContent = (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : online.oppName + " wins.")
+      sub.textContent = (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : pname(s.winner) + " wins.")
         : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "");
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
-      if (online) main.textContent = s.turn === online.side ? "Your turn (" + NAME[s.turn] + ")" : online.oppName + "'s turn";
+      if (online) main.textContent = s.turn === online.side ? "Your turn (" + NAME[s.turn] + ")" : pname(s.turn) + "'s turn";
       else if (thinking) main.innerHTML = 'Computer is thinking<span class="dots"></span>';
       else if (settings.opp === "ai") main.textContent = s.turn === settings.side ? "Your turn (" + NAME[s.turn] + ")" : "Computer";
       else main.textContent = NAME[s.turn] + "'s turn";
@@ -1429,14 +1536,22 @@ button, .cell { touch-action: manipulation; }
 
     $("undoBtn").disabled = thinking || !canUndo();
     $("restartBtn").hidden = !!online || settings.opp !== "2p";
+    $("undoBtn").hidden = !!online && !online.side;   // people watching a party game can't undo
+    $("menuBtn").textContent = online && online.party ? "← Party" : "← Menu";
     const vs = $("vsLine");
     vs.hidden = !online;
     if (online) {
       vs.innerHTML = "";
       const me = document.createElement("span"), them = document.createElement("span");
-      me.className = online.side === 1 ? "r" : "b"; me.textContent = "You (" + NAME[online.side] + ")";
-      them.className = online.side === 1 ? "b" : "r"; them.textContent = online.oppName + " (" + NAME[3 - online.side] + ")";
-      vs.append(me, " vs ", them);
+      if (online.side) {
+        me.className = online.side === 1 ? "r" : "b"; me.textContent = "You (" + NAME[online.side] + ")";
+        them.className = online.side === 1 ? "b" : "r"; them.textContent = pname(3 - online.side) + " (" + NAME[3 - online.side] + ")";
+        vs.append(me, " vs ", them);
+      } else {
+        me.className = "r"; me.textContent = pname(1) + " (Red)";
+        them.className = "b"; them.textContent = pname(2) + " (Blue)";
+        vs.append(me, " vs ", them, " · You're watching");
+      }
       if (EXTRAS[gameKey]) {
         const ex = document.createElement("span"), on = extrasOn();
         ex.className = "extras";
@@ -1496,6 +1611,9 @@ button, .cell { touch-action: manipulation; }
     }, 100);
   });
 
+  // The name of the player on a side in an online or party game.
+  const pname = side => online.party ? online.names[side] : side === online.side ? username : online.oppName;
+
   function canUndo() {
     if (!history.length) return false;
     // Online: only the player whose turn it is can undo the other player's last move.
@@ -1505,6 +1623,7 @@ button, .cell { touch-action: manipulation; }
   }
 
   function play(m, fromOpponent) {
+    if (online && online.party) return partyMoves(online.moves.concat(m));
     if (online && !fromOpponent) send({ t: "move", m });
     history.push(G.clone(state));
     G.apply(state, m);
@@ -1594,7 +1713,7 @@ button, .cell { touch-action: manipulation; }
   function showScreen(id) {
     gameId++; thinking = false;
     clearTimeout(zoomTimer);
-    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "play"]) $(s).hidden = s !== id;
+    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "partyScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -1752,8 +1871,10 @@ button, .cell { touch-action: manipulation; }
         if (guest) { if (!$("authScreen").hidden) openAuth(authMode); return; }
         username = ""; openAuth(authMode === "forgot" ? "login" : authMode); return;
       }
+      if (user.isAnonymous) { fb.auth.signOut(); return; }   // not used: guests don't log in
       if (!user.displayName) { fb.auth.signOut(); return; }   // an account that never finished being made
       signedIn(user.displayName);
+      rejoinParty();
     });
   }
 
@@ -1902,12 +2023,19 @@ button, .cell { touch-action: manipulation; }
     $("whoName").textContent = username || "Player";
     $("changeName").textContent = guest ? "Log in" : fb || FIREBASE_CONFIG ? "Log out" : "Change";
     for (const btn of document.querySelectorAll("[data-where]")) btn.setAttribute("aria-pressed", btn.dataset.where === settings.where);
-    $("menuLede").textContent = settings.where === "online"
+    const partyMode = settings.where === "party";
+    $("partyMenu").hidden = !partyMode || guest;
+    $("partyGuest").hidden = !partyMode || !guest;
+    document.querySelector("#menu .modes").hidden = partyMode;
+    document.querySelector("#menu .labs").hidden = partyMode;
+    $("menuLede").textContent = partyMode
+      ? "Make a party and send the code to your friends, or join one with a code. Chat, pick a game and play together."
+      : settings.where === "online"
       ? "Red against Blue, online. Pick a game to join the queue. It starts when another player joins."
       : "Red against Blue. Pick a game, then play a friend on this screen or take on the computer.";
   }
   for (const btn of document.querySelectorAll("[data-where]")) btn.addEventListener("click", () => {
-    settings.where = btn.dataset.where; save(); renderMenu();
+    settings.where = btn.dataset.where; save(); partyMenuErr(""); renderMenu();
   });
   const pickGame = key => settings.where === "online" ? startQueue(key) : openSetup(key);
 
@@ -1937,7 +2065,8 @@ button, .cell { touch-action: manipulation; }
     if (!online || !net) return;
     pub(net, inbox(online.oppId), Object.assign({ from: net.id }, msg));
   }
-  function leaveOnline() {
+  function leaveOnline(e) {
+    if (party) leaveParty(!(e instanceof Event));   // closing the page keeps your party, so a refresh can rejoin it
     if (net) {
       const n = net;
       if (online) send({ t: "bye" });
@@ -2193,12 +2322,394 @@ button, .cell { touch-action: manipulation; }
     } else render();
   }
 
+  // ================= Parties =================
+  // A party lives in Firebase. parties/<code> holds the game, the extra rules,
+  // who plays Red and Blue, and the current match with its list of moves.
+  // parties/<code>/members lists who's in, and parties/<code>/chat holds the
+  // chat. The owner controls the settings; only the player whose turn it is
+  // can add (or undo) a move, which Firebase's rules check.
+  const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const AWAY_MS = 120000;
+  let party = null, rejoinTried = false;
+  const pref = code => fb.db.collection("parties").doc(code);
+  const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
+  const partyMenuErr = t => { $("partyMenuErr").textContent = t; };
+
+  function fbErrorText(e) {
+    const c = (e && e.code) || "";
+    if (c.includes("permission")) return "That isn't allowed. If this keeps happening, the party settings in Firebase may need updating.";
+    if (c.includes("unavailable") || c.includes("network")) return "Couldn't connect. Check your internet connection.";
+    return (e && e.message && !c) ? e.message : "Something went wrong. Try again.";
+  }
+
+  async function partyUser() {
+    if (!fb) throw new Error(fbFailed ? "Couldn't load the login service. Check your internet connection." : "Still connecting. Try again in a moment.");
+    const u = fb.auth.currentUser;
+    if (guest || !u || u.isAnonymous) throw new Error("Parties are for players with accounts. Log in or create an account to join one.");
+    return u;
+  }
+
+  async function createParty() {
+    partyMenuErr("");
+    $("partyCreate").disabled = true;
+    try {
+      const user = await partyUser();
+      for (let i = 0; i < 5; i++) {
+        let code = "";
+        for (let j = 0; j < 5; j++) code += CODE_CHARS[(Math.random() * CODE_CHARS.length) | 0];
+        const made = await fb.db.runTransaction(async t => {
+          if ((await t.get(pref(code))).exists) return false;
+          t.set(pref(code), { owner: user.uid, game: "normal", opts: { precise: !!extraPrefs.precise }, red: user.uid, blue: "", match: null, created: stamp() });
+          return true;
+        });
+        if (made) return await enterParty(code, user);
+      }
+      partyMenuErr("Couldn't make a party. Try again.");
+    } catch (e) { partyMenuErr(fbErrorText(e)); }
+    finally { $("partyCreate").disabled = false; }
+  }
+
+  async function joinParty(raw, quiet) {
+    const code = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 5) return partyMenuErr("Party codes are 5 letters and numbers.");
+    partyMenuErr("");
+    $("partyJoin").disabled = true;
+    try {
+      const user = await partyUser();
+      if (!(await pref(code).get()).exists) {
+        try { sessionStorage.removeItem("att-party"); } catch (e) {}
+        return quiet ? null : partyMenuErr("No party has that code. Check it and try again.");
+      }
+      await enterParty(code, user);
+    } catch (e) { if (!quiet) partyMenuErr(fbErrorText(e)); }
+    finally { $("partyJoin").disabled = false; }
+  }
+
+  // After a refresh, go back into the party you were in.
+  function rejoinParty() {
+    if (rejoinTried || party) return;
+    rejoinTried = true;
+    let code = null;
+    try { code = sessionStorage.getItem("att-party"); } catch (e) {}
+    if (code) { settings.where = "party"; renderMenu(); joinParty(code, true); }
+  }
+
+  async function enterParty(code, user) {
+    leaveOnline();
+    const p = party = { code, me: user.uid, unsubs: [], doc: null, members: new Map(), timer: null, firstDoc: true, membersLoaded: false };
+    await pref(code).collection("members").doc(user.uid).set({ name: username, seen: stamp() });
+    if (party !== p) return;
+    try { sessionStorage.setItem("att-party", code); } catch (e) {}
+    $("partyCode").textContent = code;
+    $("chatLog").innerHTML = "";
+    showParty();
+    const ref = pref(code);
+    p.unsubs.push(ref.onSnapshot(snap => onPartyDoc(p, snap), e => partyGone(p, "Lost connection to the party.")));
+    p.unsubs.push(ref.collection("members").onSnapshot(snap => onMembers(p, snap), () => {}));
+    p.unsubs.push(ref.collection("chat").orderBy("ts").limitToLast(60).onSnapshot(snap => onChat(p, snap), () => {}));
+    p.timer = setInterval(() => {
+      ref.collection("members").doc(p.me).update({ seen: stamp() }).catch(() => {});
+      if (!$("partyScreen").hidden) renderParty();
+    }, 45000);
+  }
+
+  // explicit: the player chose to leave (the owner leaving closes the party).
+  function leaveParty(explicit) {
+    const p = party;
+    if (!p) return;
+    party = null;
+    p.unsubs.forEach(u => { try { u(); } catch (e) {} });
+    clearInterval(p.timer);
+    if (online && online.party) online = null;
+    if (explicit) { try { sessionStorage.removeItem("att-party"); } catch (e) {} }
+    const ref = pref(p.code);
+    if (explicit && p.doc && p.doc.owner === p.me) ref.delete().catch(() => {});
+    else ref.collection("members").doc(p.me).delete().catch(() => {});
+  }
+
+  function partyGone(p, msg) {
+    if (party !== p) return;
+    leaveParty(true);
+    settings.where = "party";
+    showMenu();
+    partyMenuErr(msg);
+  }
+
+  function showParty() {
+    if (!party) return showMenu();
+    $("chat").parentNode !== $("partyChatSlot") && $("partyChatSlot").appendChild($("chat"));
+    $("playChatSlot").hidden = true;
+    showScreen("partyScreen");
+    renderParty();
+  }
+
+  const isHere = (p, uid) => {
+    const m = p.members.get(uid);
+    if (!m) return false;
+    const t = m.seen && m.seen.toMillis ? m.seen.toMillis() : Date.now();
+    return Date.now() - t < AWAY_MS;
+  };
+  const memberName = (p, uid) => (p.members.get(uid) || {}).name || "Someone";
+
+  function onPartyDoc(p, snap) {
+    if (party !== p) return;
+    if (!snap.exists) return partyGone(p, "The party was closed by its owner.");
+    p.doc = snap.data();
+    const first = p.firstDoc;
+    p.firstDoc = false;
+    tidyRoles(p);
+    syncMatch(p, first);
+    if (!$("partyScreen").hidden) renderParty();
+  }
+
+  function onMembers(p, snap) {
+    if (party !== p) return;
+    p.members = new Map(snap.docs.map(d => [d.id, d.data({ serverTimestamps: "estimate" })]));
+    if (p.membersLoaded && !p.members.has(p.me) && !snap.metadata.hasPendingWrites) return partyGone(p, "You were removed from the party.");
+    p.membersLoaded = true;
+    tidyRoles(p);
+    // Did a player in the current game leave?
+    if (online && online.party && p.doc && p.doc.match) {
+      const m = p.doc.match, redHere = isHere(p, m.red), blueHere = isHere(p, m.blue);
+      const left = !(redHere && blueHere);
+      online.leftName = !redHere ? m.redName : !blueHere ? m.blueName : "";
+      if (left !== online.left) { online.left = left; if (!$("play").hidden) render(); }
+    }
+    if (!$("partyScreen").hidden) renderParty();
+  }
+
+  // The owner fills empty Red / Blue spots with people who are here.
+  function tidyRoles(p) {
+    const d = p.doc;
+    if (!d || d.owner !== p.me || !p.membersLoaded) return;
+    let red = isHere(p, d.red) ? d.red : "", blue = isHere(p, d.blue) && d.blue !== red ? d.blue : "";
+    const free = [...p.members.keys()].filter(u => isHere(p, u) && u !== red && u !== blue)
+      .sort((a, b) => (b === p.me) - (a === p.me));
+    if (!red) red = free.shift() || "";
+    if (!blue) blue = free.shift() || "";
+    if (red !== d.red || blue !== d.blue) pref(p.code).update({ red, blue }).catch(() => {});
+  }
+
+  function renderParty() {
+    const p = party;
+    if (!p) return;
+    const d = p.doc || {}, owner = d.owner === p.me;
+    const here = [...p.members.keys()].filter(u => isHere(p, u));
+    const order = u => u === d.red ? 0 : u === d.blue ? 1 : 2;
+    here.sort((a, b) => order(a) - order(b) || memberName(p, a).localeCompare(memberName(p, b)));
+    $("partyCount").textContent = "In the party (" + here.length + ")";
+    $("partyLede").textContent = owner ? "Send this code to your friends so they can join."
+      : "You're in " + memberName(p, d.owner) + "'s party.";
+
+    const list = $("partyMembers");
+    list.innerHTML = "";
+    for (const uid of here) {
+      const li = document.createElement("li");
+      const role = document.createElement("span");
+      role.className = "role" + (uid === d.red ? " r" : uid === d.blue ? " b" : "");
+      role.textContent = uid === d.red ? "Red" : uid === d.blue ? "Blue" : "Watching";
+      const nm = document.createElement("span");
+      nm.className = "mname";
+      nm.textContent = memberName(p, uid);
+      for (const t of [uid === d.owner ? "owner" : "", uid === p.me ? "you" : ""]) if (t) {
+        const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = t; nm.appendChild(tag);
+      }
+      li.append(nm);
+      if (owner) {
+        const seg = document.createElement("div");
+        seg.className = "seg"; seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Role for " + memberName(p, uid));
+        for (const [side, label, cls] of [[1, "Red", "opt-red"], [2, "Blue", "opt-blue"], [0, "Watch", ""]]) {
+          const b = document.createElement("button");
+          b.type = "button"; b.textContent = label; if (cls) b.className = cls;
+          const cur = uid === d.red ? 1 : uid === d.blue ? 2 : 0;
+          b.setAttribute("aria-pressed", String(cur === side));
+          b.addEventListener("click", () => setRole(uid, side));
+          seg.appendChild(b);
+        }
+        li.appendChild(seg);
+        if (uid !== p.me) {
+          const k = document.createElement("button");
+          k.type = "button"; k.className = "btn kick"; k.textContent = "Remove";
+          k.setAttribute("aria-label", "Remove " + memberName(p, uid));
+          k.addEventListener("click", () => pref(p.code).collection("members").doc(uid).delete().catch(() => {}));
+          li.appendChild(k);
+        }
+      } else li.appendChild(role);
+      list.appendChild(li);
+    }
+    $("partyMembersNote").textContent = here.length < 2 ? "Waiting for someone to join. Send them the code." :
+      owner ? "Pick who plays Red and Blue. Everyone else watches." : "";
+
+    for (const b of document.querySelectorAll("[data-pgame]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.pgame === d.game));
+      b.disabled = !owner;
+    }
+    const ex = $("partyExtras");
+    ex.innerHTML = "";
+    const extras = EXTRAS[d.game] || [];
+    for (const x of extras) {
+      const g = document.createElement("div");
+      g.className = "group";
+      g.innerHTML = '<span class="label"></span><div class="seg" role="group"><button type="button" data-v="0">Off</button><button type="button" data-v="1">On</button></div><p class="note"></p>';
+      g.querySelector(".label").textContent = x.name;
+      g.querySelector(".note").textContent = x.desc;
+      const on = !!(d.opts || {})[x.key];
+      for (const b of g.querySelectorAll("button")) {
+        b.setAttribute("aria-pressed", String((b.dataset.v === "1") === on));
+        b.disabled = !owner;
+        b.addEventListener("click", () => {
+          const v = b.dataset.v === "1";
+          extraPrefs[x.key] = v;
+          try { localStorage.setItem("att-extras", JSON.stringify(extraPrefs)); } catch (e) {}
+          pref(p.code).update({ ["opts." + x.key]: v }).catch(() => {});
+        });
+      }
+      ex.appendChild(g);
+    }
+    ex.hidden = !extras.length;
+
+    const ready = d.red && d.blue && d.red !== d.blue && isHere(p, d.red) && isHere(p, d.blue);
+    const start = $("partyStart");
+    start.hidden = !owner;
+    start.disabled = !ready;
+    start.textContent = d.match ? "Start a new game" : "Start game";
+    $("partyGoGame").hidden = !d.match;
+    const mine = d.red === p.me ? "You're playing Red." : d.blue === p.me ? "You're playing Blue." : "You're watching.";
+    $("partyStartNote").textContent = owner ? (ready ? "" : "You need a Red player and a Blue player to start.")
+      : mine + " Waiting for " + memberName(p, d.owner) + " to start the game.";
+  }
+
+  function setRole(uid, side) {
+    const p = party, d = p && p.doc;
+    if (!d || d.owner !== p.me) return;
+    let red = d.red, blue = d.blue;
+    if (side === 1) { if (blue === uid) blue = red === uid ? "" : red; red = uid; }
+    else if (side === 2) { if (red === uid) red = blue === uid ? "" : blue; blue = uid; }
+    else { if (red === uid) red = ""; if (blue === uid) blue = ""; }
+    pref(p.code).update({ red, blue }).catch(() => {});
+  }
+
+  function startPartyGame() {
+    const p = party, d = p && p.doc;
+    if (!d || d.owner !== p.me || !d.red || !d.blue || d.red === d.blue) return;
+    const opts = {};
+    for (const x of EXTRAS[d.game] || []) opts[x.key] = !!(d.opts || {})[x.key];
+    pref(p.code).update({
+      match: { id: newId(), game: d.game, opts, red: d.red, blue: d.blue,
+        redName: memberName(p, d.red), blueName: memberName(p, d.blue), moves: [] }
+    }).catch(e => { $("partyStartNote").textContent = fbErrorText(e); });
+  }
+
+  // Keep the board in step with the party's list of moves.
+  function syncMatch(p, first) {
+    const m = p.doc.match;
+    if (!m || !GAMES[m.game]) {
+      if (online && online.party) { online = null; if (!$("play").hidden) showParty(); }
+      return;
+    }
+    if (!online || !online.party || online.matchId !== m.id) {
+      const side = m.red === p.me ? 1 : m.blue === p.me ? 2 : 0;
+      online = { party: true, matchId: m.id, side, names: { 1: m.redName, 2: m.blueName },
+        oppName: side === 1 ? m.blueName : m.redName, opts: m.opts || {}, started: true, left: false, leftName: "", moves: [] };
+      if (!first) return openPartyGame();   // a new game started: everyone goes to it
+    }
+    if (!$("play").hidden) applyMoves(m.moves || []);
+  }
+
+  function openPartyGame() {
+    const p = party, m = p && p.doc && p.doc.match;
+    if (!m || !online || !online.party) return;
+    gameKey = m.game; G = GAMES[m.game];
+    startGame();
+    $("playChatSlot").appendChild($("chat"));
+    $("playChatSlot").hidden = false;
+    online.moves = [];
+    applyMoves(m.moves || []);
+  }
+
+  function applyMoves(ms) {
+    const cur = online.moves;
+    const prefix = cur.length <= ms.length && cur.every((v, i) => v === ms[i]);
+    if (prefix && cur.length === ms.length) return render();
+    if (prefix && ms.length === cur.length + 1 && G.legal(state).includes(ms[cur.length])) {
+      const m = ms[cur.length];
+      history.push(G.clone(state)); G.apply(state, m); online.moves = ms.slice();
+      return render(m);
+    }
+    // An undo (or a jump of several moves): replay the game from the start.
+    state = G.newState();
+    if (G === Supreme) state.opts = online.opts;
+    history = []; online.moves = [];
+    for (const m of ms) {
+      if (state.winner || !G.legal(state).includes(m)) break;
+      history.push(G.clone(state)); G.apply(state, m); online.moves.push(m);
+    }
+    render();
+  }
+
+  function partyMoves(ms) {
+    if (!party || !online || !online.party) return;
+    pref(party.code).update({ "match.moves": ms }).catch(() => {});
+  }
+
+  // ---------- Chat ----------
+  function onChat(p, snap) {
+    if (party !== p) return;
+    const log = $("chatLog");
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    log.innerHTML = "";
+    if (!snap.size) {
+      const e = document.createElement("div");
+      e.className = "msg sys"; e.textContent = "No messages yet. Say hi!";
+      log.appendChild(e);
+    }
+    let lastMine = false;
+    for (const doc of snap.docs) {
+      const m = doc.data();
+      const row = document.createElement("div");
+      lastMine = m.uid === p.me;
+      row.className = "msg" + (lastMine ? " mine" : "");
+      const b = document.createElement("b");
+      b.textContent = m.name;
+      row.append(b, document.createTextNode(m.text));
+      log.appendChild(row);
+    }
+    if (atBottom || lastMine) log.scrollTop = log.scrollHeight;
+  }
+  $("chatForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const inp = $("chatIn"), text = inp.value.trim().slice(0, 300);
+    if (!text || !party) return;
+    inp.value = "";
+    pref(party.code).collection("chat").add({ uid: party.me, name: username, text, ts: stamp() }).catch(() => {
+      const row = document.createElement("div");
+      row.className = "msg sys"; row.textContent = "Couldn't send that message.";
+      $("chatLog").appendChild(row);
+    });
+  });
+
+  $("partyCreate").addEventListener("click", createParty);
+  $("partyLogin").addEventListener("click", leaveGuest);
+  $("partyJoinForm").addEventListener("submit", e => { e.preventDefault(); joinParty($("partyCodeIn").value); });
+  $("partyCodeIn").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+  $("partyLeave").addEventListener("click", showMenu);
+  $("partyStart").addEventListener("click", startPartyGame);
+  $("partyGoGame").addEventListener("click", openPartyGame);
+  $("partyCopy").addEventListener("click", () => {
+    if (!party) return;
+    const done = () => { $("partyCopy").textContent = "Copied!"; setTimeout(() => { $("partyCopy").textContent = "Copy code"; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(party.code).then(done, () => {});
+  });
+  for (const b of document.querySelectorAll("[data-pgame]")) b.addEventListener("click", () => {
+    if (party && party.doc && party.doc.owner === party.me) pref(party.code).update({ game: b.dataset.pgame }).catch(() => {});
+  });
+
   $("queueCancel").addEventListener("click", showMenu);
   $("queueRetry").addEventListener("click", () => startQueue(gameKey));
 
   // ---------- Events ----------
   for (const btn of document.querySelectorAll("[data-game]")) btn.addEventListener("click", () => pickGame(btn.dataset.game));
-  $("menuBtn").addEventListener("click", showMenu);
+  $("menuBtn").addEventListener("click", () => online && online.party ? showParty() : showMenu());
   $("setupBack").addEventListener("click", showMenu);
   $("startBtn").addEventListener("click", startGame);
   $("endNew").addEventListener("click", () => online ? requestRematch() : newGame());
@@ -2220,7 +2731,7 @@ button, .cell { touch-action: manipulation; }
   for (const btn of document.querySelectorAll("[data-rules]")) btn.addEventListener("click", () => openRules(btn.dataset.rules));
   $("rulesBack").addEventListener("click", showMenu);
   $("rulesPlay").addEventListener("click", () => pickGame(rulesKey));
-  $("endMenu").addEventListener("click", showMenu);
+  $("endMenu").addEventListener("click", () => online && online.party ? showParty() : showMenu());
   board.addEventListener("click", e => {
     // After pressing Zoom in (when play can go anywhere), tap a game to zoom into it.
     if (G === Supreme && picking) {
@@ -2236,6 +2747,7 @@ button, .cell { touch-action: manipulation; }
   });
   $("undoBtn").addEventListener("click", () => {
     if (thinking || !canUndo()) return;
+    if (online && online.party) return partyMoves(online.moves.slice(0, -1));
     if (online) {
       send({ t: "undo", n: history.length });
       state = history.pop();
