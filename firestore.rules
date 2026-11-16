@@ -103,7 +103,7 @@ service cloud.firestore {
       function joinOk() {
         return only(['blue', 'blueName', 'players', 'updated'])
           && resource.data.blue == ''
-          && request.auth.uid != resource.data.red
+          && request.auth.uid == resource.data.invitee
           && request.resource.data.blue == request.auth.uid
           && request.resource.data.players == [resource.data.red, request.auth.uid]
           && realName(request.resource.data.blueName)
@@ -117,9 +117,11 @@ service cloud.firestore {
       }
       allow get: if signedIn();
       allow list: if signedIn() && request.auth.uid in resource.data.players;
-      // Only accounts can start a game; guests can join one.
+      // Games start from an invite in Messages, so only accounts can make one, and only the invited player can join.
       allow create: if signedIn() && !isGuest() && code.matches('[A-Z2-9]{5}')
-        && request.resource.data.keys().hasOnly(['game', 'opts', 'red', 'blue', 'redName', 'blueName', 'players', 'moves', 'done', 'resigned', 'updated'])
+        && request.resource.data.keys().hasOnly(['game', 'opts', 'red', 'blue', 'redName', 'blueName', 'invitee', 'inviteeName', 'players', 'moves', 'done', 'resigned', 'updated'])
+        && request.resource.data.invitee is string && request.resource.data.invitee != request.auth.uid
+        && request.resource.data.inviteeName is string
         && request.resource.data.game in ['normal', 'ultimate', 'supreme', 'mega']
         && request.resource.data.red == request.auth.uid
         && request.resource.data.blue == '' && request.resource.data.blueName == ''
@@ -182,7 +184,12 @@ service cloud.firestore {
         function users() { return get(/databases/$(database)/documents/dms/$(id)).data.users; }
         allow read: if signedIn() && request.auth.uid in users();
         allow create: if signedIn() && !isGuest() && request.auth.uid in users()
-          && request.resource.data.keys().hasOnly(['from', 'text', 'ts'])
+          && request.resource.data.keys().hasOnly(['from', 'text', 'ts', 'invite'])
+          && (!('invite' in request.resource.data)
+            || (request.resource.data.invite.keys().hasOnly(['kind', 'code', 'game'])
+              && request.resource.data.invite.kind in ['live', 'unsynced']
+              && request.resource.data.invite.code.matches('[A-Z2-9]{5}')
+              && request.resource.data.invite.game in ['normal', 'ultimate', 'supreme', 'mega']))
           && request.resource.data.from == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
