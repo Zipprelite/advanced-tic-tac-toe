@@ -146,5 +146,49 @@ service cloud.firestore {
           && request.resource.data.ts == request.time;
       }
     }
+
+    // Messages between two accounts. The conversation id is the two account ids in order, joined by _.
+    match /dms/{id} {
+      function member() { return request.auth.uid in resource.data.users; }
+      function owns(d, u) { return d.names[u] is string
+        && get(/databases/$(database)/documents/usernames/$(d.names[u].lower())).data.uid == u; }
+      allow get: if signedIn() && (resource == null || member());
+      allow list: if signedIn() && request.auth.uid in resource.data.users;
+      allow create: if signedIn() && !isGuest()
+        && request.resource.data.keys().hasOnly(['users', 'names', 'last', 'read', 'updated'])
+        && request.resource.data.users.size() == 2
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.users[0] < request.resource.data.users[1]
+        && id == request.resource.data.users[0] + '_' + request.resource.data.users[1]
+        && request.resource.data.names.keys().hasOnly(request.resource.data.users)
+        && owns(request.resource.data, request.resource.data.users[0])
+        && owns(request.resource.data, request.resource.data.users[1])
+        && request.resource.data.last == null
+        && request.resource.data.read == {}
+        && request.resource.data.updated == request.time;
+      // Members can mark it read, and record their own latest message for the list.
+      allow update: if signedIn() && member() && !isGuest()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last', 'read', 'updated'])
+        && request.resource.data.read.diff(resource.data.read).affectedKeys().hasOnly([request.auth.uid])
+        && (request.resource.data.last == resource.data.last
+          || (request.resource.data.last.keys().hasOnly(['from', 'text', 'ts'])
+            && request.resource.data.last.from == request.auth.uid
+            && request.resource.data.last.text is string
+            && request.resource.data.last.text.size() <= 120
+            && request.resource.data.last.ts == request.time))
+        && (request.resource.data.updated == resource.data.updated || request.resource.data.updated == request.time);
+
+      match /msgs/{m} {
+        function users() { return get(/databases/$(database)/documents/dms/$(id)).data.users; }
+        allow read: if signedIn() && request.auth.uid in users();
+        allow create: if signedIn() && !isGuest() && request.auth.uid in users()
+          && request.resource.data.keys().hasOnly(['from', 'text', 'ts'])
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.ts == request.time;
+      }
+    }
   }
 }

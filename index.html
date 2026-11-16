@@ -340,6 +340,38 @@ button, .cell { touch-action: manipulation; }
 .agames .btn { padding: 6px 12px; font-size: 13px; }
 @media (max-width: 640px) { .party-menu { grid-template-columns: 1fr; } }
 .party-guest { gap: 12px; max-width: 520px; }
+/* Messages */
+.dm-strip { appearance: none; display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 22px; padding: 16px 20px; text-align: left;
+  font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); cursor: pointer; }
+.dm-strip:hover { border-color: var(--muted); }
+.dm-strip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.dm-strip > svg { width: 26px; height: 26px; flex: none; color: var(--blue); }
+.dm-strip-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.dm-strip-text b { font: 700 17px var(--font-display); }
+.dm-strip-text span { color: var(--muted); font-size: 14px; }
+.dm-badge { flex: none; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; background: var(--red); color: #fff; font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+.dm-title { font-weight: 800; font-size: clamp(32px, 6vw, 48px); letter-spacing: -0.025em; line-height: 1; }
+.dm-grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.dm-side { gap: 14px; }
+.dm-new { display: flex; flex-direction: column; gap: 8px; }
+.dm-new .err:empty { display: none; }
+.dm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dm-list button { appearance: none; width: 100%; text-align: left; font: inherit; color: var(--ink); border: 0; border-radius: 10px; padding: 10px 12px; background: var(--cell); cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.dm-list button[aria-current="true"] { outline: 2px solid var(--blue); outline-offset: -2px; }
+.dm-list .who-row { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+.dm-list .prev { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-list .unread .who-row::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--red); align-self: center; flex: none; }
+.dm-list .unread .prev { color: var(--ink); font-weight: 600; }
+.dm-thread { gap: 12px; }
+.dm-head { display: flex; align-items: center; gap: 12px; min-height: 36px; font-size: 17px; }
+.dm-head .btn.back { display: none; }
+.dm-log { min-height: 340px; max-height: 60vh; }
+.dm-log .msg .t { color: var(--muted); font-size: 12px; margin-left: 8px; }
+@media (max-width: 760px) {
+  .dm-grid { grid-template-columns: 1fr; }
+  .dm-grid.open .dm-side, .dm-grid:not(.open) .dm-thread { display: none; }
+  .dm-head .btn.back { display: inline-flex; }
+}
 .code-in { text-transform: uppercase; letter-spacing: 0.25em; font-weight: 700; text-align: center; font-size: 20px; }
 .party { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 .party .btn.back { align-self: flex-start; }
@@ -591,6 +623,51 @@ button, .cell { touch-action: manipulation; }
         3D Cube <span class="soon">Experimental</span>
       </button>
       <button type="button" class="linkbtn" id="rules-cube" data-rules="cube">Rules</button>
+    </div>
+    <button type="button" class="dm-strip" id="dmOpen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
+      <span class="dm-strip-text"><b>Messages</b><span id="dmStripNote">Send messages to other players' accounts.</span></span>
+      <span class="dm-badge" id="dmBadge" hidden>0</span>
+    </button>
+  </section>
+
+  <!-- ===== Messages (DMs) ===== -->
+  <section class="party" id="dmScreen" hidden>
+    <button type="button" class="btn back" id="dmBack">← Menu</button>
+    <div>
+      <h1 class="dm-title">Messages</h1>
+      <p class="lede" id="dmLede">Message other players by their username.</p>
+    </div>
+    <div class="setup-card party-guest" id="dmGuest" hidden>
+      <span class="label">Messages need an account</span>
+      <p class="note">You're playing as a guest. Log in or create an account to send and get messages.</p>
+      <button type="button" class="btn primary start" id="dmLogin">Log in or create an account</button>
+    </div>
+    <div class="dm-grid" id="dmMain">
+      <div class="setup-card dm-side" id="dmSide">
+        <form class="dm-new" id="dmNewForm" novalidate>
+          <label class="label" for="dmTo">New message</label>
+          <div class="chat-form">
+            <input type="text" class="text-in" id="dmTo" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Username">
+            <button type="submit" class="btn" id="dmStart">Start</button>
+          </div>
+          <p class="note err" id="dmErr" role="alert"></p>
+        </form>
+        <span class="label">Conversations</span>
+        <ul class="dm-list" id="dmList"></ul>
+        <p class="note" id="dmEmpty"></p>
+      </div>
+      <div class="setup-card dm-thread" id="dmThread">
+        <div class="dm-head">
+          <button type="button" class="btn back" id="dmThreadBack">← All</button>
+          <b id="dmWith">Pick a conversation</b>
+        </div>
+        <div class="chat-log dm-log" id="dmLog" aria-live="polite"></div>
+        <form class="chat-form" id="dmForm" novalidate>
+          <input type="text" class="text-in" id="dmIn" maxlength="500" autocomplete="off" placeholder="Write a message…" aria-label="Message">
+          <button type="submit" class="btn primary">Send</button>
+        </form>
+      </div>
     </div>
   </section>
 
@@ -2096,7 +2173,7 @@ button, .cell { touch-action: manipulation; }
   function showScreen(id) {
     gameId++; thinking = false;
     clearTimeout(zoomTimer);
-    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "partyScreen", "play"]) $(s).hidden = s !== id;
+    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "partyScreen", "dmScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -2244,6 +2321,7 @@ button, .cell { touch-action: manipulation; }
   function leaveGuest() {
     leaveOnline();
     stopAsyncList();
+    stopDms();
     if (fb && fb.auth.currentUser && fb.auth.currentUser.isAnonymous) fb.auth.signOut();
     guest = false;
     store("att-guest-on", null);
@@ -2304,6 +2382,7 @@ button, .cell { touch-action: manipulation; }
   function logOut() {
     leaveOnline();
     stopAsyncList();
+    stopDms();
     $("authPass").value = "";
     fb.auth.signOut();
   }
@@ -2455,6 +2534,8 @@ button, .cell { touch-action: manipulation; }
     document.querySelector("#menu .labs").hidden = partyMode || asyncMode;
     watchAsyncList();
     renderAsyncList();
+    watchDms();
+    renderDms();
     $("menuLede").textContent = partyMode
       ? "Make a party and send the code to your friends, or join one with a code. Chat, pick a game and play together."
       : asyncMode
@@ -3459,6 +3540,182 @@ button, .cell { touch-action: manipulation; }
     try { localStorage.setItem("att-extras", JSON.stringify(extraPrefs)); } catch (e) {}
     renderMenu();
   });
+
+  // ================= Messages (DMs) =================
+  // A conversation between two accounts lives at dms/{idA_idB} (the two account ids in order),
+  // with its messages in a "msgs" list under it. Guests can't use messages.
+  const dref = id => fb.db.collection("dms").doc(id);
+  let dms = null;   // { uid, convos, loaded, unsub }
+  let dmOpenId = null, dmUnsub = null, dmPending = "";
+  const dmOther = c => c.users[0] === dms.uid ? c.users[1] : c.users[0];
+  const isUnread = c => !!(c.last && c.last.from !== dms.uid && (tms(c.last.ts) || 0) > (tms((c.read || {})[dms.uid]) || 0));
+  function dmErr(t) { $("dmErr").textContent = t || ""; }
+
+  function watchDms() {
+    const u = fb && fb.auth.currentUser;
+    if (!u || u.isAnonymous || guest) { if (dms) stopDms(); return; }
+    if (dms && dms.uid === u.uid) return;
+    stopDms();
+    const d = dms = { uid: u.uid, convos: [], loaded: false, unsub: null };
+    d.unsub = fb.db.collection("dms").where("users", "array-contains", u.uid).onSnapshot(snap => {
+      if (dms !== d) return;
+      d.convos = snap.docs.map(x => Object.assign({ id: x.id }, x.data({ serverTimestamps: "estimate" })));
+      d.convos.sort((a, b) => (tms(b.updated) || 0) - (tms(a.updated) || 0));
+      d.loaded = true;
+      renderDms();
+      if (dmOpenId && !$("dmScreen").hidden) markRead(dmOpenId);
+    }, () => { if (dms === d) { d.loaded = true; renderDms(); } });
+  }
+  function stopDms() {
+    if (dms) { try { dms.unsub && dms.unsub(); } catch (e) {} }
+    dms = null;
+    closeThread();
+    renderDms();
+  }
+
+  function renderDms() {
+    const unread = dms ? dms.convos.filter(isUnread).length : 0;
+    $("dmBadge").hidden = !unread;
+    $("dmBadge").textContent = unread;
+    $("dmStripNote").textContent = guest ? "Log in to send messages to other players."
+      : unread ? plural(unread, "conversation") + " with new messages."
+      : "Send messages to other players' accounts.";
+    if ($("dmScreen").hidden) return;
+    $("dmGuest").hidden = !guest;
+    $("dmMain").hidden = guest;
+    const ul = $("dmList");
+    ul.innerHTML = "";
+    const list = dms ? dms.convos : [];
+    $("dmEmpty").textContent = !dms || !dms.loaded ? "Loading…" : list.length ? "" : "No conversations yet. Type a username above to start one.";
+    for (const c of list) {
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button";
+      b.className = isUnread(c) ? "unread" : "";
+      b.setAttribute("aria-current", c.id === dmOpenId);
+      const row = document.createElement("span"), prev = document.createElement("span");
+      row.className = "who-row"; prev.className = "prev";
+      row.textContent = (c.names || {})[dmOther(c)] || "Player";
+      prev.textContent = c.last ? (c.last.from === dms.uid ? "You: " : "") + c.last.text : "No messages yet";
+      b.append(row, prev);
+      b.addEventListener("click", () => openThread(c.id));
+      li.appendChild(b);
+      ul.appendChild(li);
+    }
+    if (dmOpenId) {
+      const c = list.find(x => x.id === dmOpenId);
+      if (c) $("dmWith").textContent = (c.names || {})[dmOther(c)] || "Player";
+    }
+    $("dmForm").hidden = !dmOpenId;
+  }
+
+  function openDms() {
+    if (!fb) return;
+    dmErr("");
+    showScreen("dmScreen");
+    watchDms();
+    if (!dmOpenId) { $("dmWith").textContent = "Pick a conversation"; $("dmLog").innerHTML = ""; $("dmMain").classList.remove("open"); }
+    renderDms();
+  }
+
+  function openThread(id, name) {
+    if (!dms) return;
+    if (dmOpenId !== id) {
+      closeThread();
+      dmOpenId = id;
+      $("dmLog").innerHTML = "";
+      dmUnsub = dref(id).collection("msgs").orderBy("ts").limitToLast(100).onSnapshot(snap => {
+        if (dmOpenId === id) renderThread(snap);
+      }, () => {});
+    }
+    if (name) $("dmWith").textContent = name;
+    $("dmMain").classList.add("open");
+    markRead(id);
+    renderDms();
+    $("dmIn").focus({ preventScroll: true });
+  }
+  function closeThread() {
+    if (dmUnsub) { try { dmUnsub(); } catch (e) {} }
+    dmUnsub = null; dmOpenId = null;
+    $("dmMain").classList.remove("open");
+  }
+
+  function markRead(id) {
+    const c = dms && dms.convos.find(x => x.id === id);
+    if (c && isUnread(c)) dref(id).update({ ["read." + dms.uid]: stamp() }).catch(() => {});
+  }
+
+  const fmtTime = t => {
+    if (!t) return "";
+    const d = new Date(t), now = new Date();
+    return d.toDateString() === now.toDateString()
+      ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      : d.toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+  function renderThread(snap) {
+    const log = $("dmLog");
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    log.innerHTML = "";
+    const c = dms && dms.convos.find(x => x.id === dmOpenId);
+    if (!snap.size) {
+      const e = document.createElement("div");
+      e.className = "msg sys"; e.textContent = "No messages yet. Say hi!";
+      log.appendChild(e);
+    }
+    let lastMine = false;
+    for (const doc of snap.docs) {
+      const m = doc.data({ serverTimestamps: "estimate" });
+      lastMine = m.from === dms.uid;
+      const row = document.createElement("div"), b = document.createElement("b"), t = document.createElement("span");
+      row.className = "msg" + (lastMine ? " mine" : "");
+      b.textContent = lastMine ? username : ((c && c.names) || {})[m.from] || $("dmWith").textContent;
+      t.className = "t"; t.textContent = fmtTime(tms(m.ts));
+      row.append(b, document.createTextNode(m.text), t);
+      log.appendChild(row);
+    }
+    if (atBottom || lastMine) log.scrollTop = log.scrollHeight;
+  }
+
+  async function startDm(raw) {
+    const name = String(raw || "").trim();
+    dmErr("");
+    if (!dms) return dmErr("Still connecting. Try again in a moment.");
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) return dmErr("Usernames are 3 to 16 letters, numbers or _.");
+    $("dmStart").disabled = true;
+    try {
+      const snap = await fb.db.collection("usernames").doc(name.toLowerCase()).get();
+      if (!snap.exists) return dmErr("No account has that username.");
+      const other = snap.data();
+      if (other.uid === dms.uid) return dmErr("That's you!");
+      const users = [dms.uid, other.uid].sort(), id = users[0] + "_" + users[1];
+      const ref = dref(id);
+      if (!(await ref.get()).exists) {
+        await ref.set({ users, names: { [dms.uid]: username, [other.uid]: other.name }, last: null, read: {}, updated: stamp() });
+      }
+      $("dmTo").value = "";
+      openThread(id, other.name);
+    } catch (e) { dmErr(fbErrorText(e)); }
+    finally { $("dmStart").disabled = false; }
+  }
+
+  $("dmForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const inp = $("dmIn"), text = inp.value.trim().slice(0, 500), id = dmOpenId;
+    if (!text || !id || !dms) return;
+    inp.value = "";
+    const me = dms.uid, batch = fb.db.batch();
+    batch.set(dref(id).collection("msgs").doc(), { from: me, text, ts: stamp() });
+    batch.update(dref(id), { last: { from: me, text: text.slice(0, 120), ts: stamp() }, updated: stamp(), ["read." + me]: stamp() });
+    batch.commit().catch(err => {
+      const row = document.createElement("div");
+      row.className = "msg sys"; row.textContent = "Couldn't send that message. " + fbErrorText(err);
+      $("dmLog").appendChild(row);
+    });
+  });
+  $("dmNewForm").addEventListener("submit", e => { e.preventDefault(); startDm($("dmTo").value); });
+  $("dmOpen").addEventListener("click", openDms);
+  $("dmBack").addEventListener("click", () => { closeThread(); showMenu(); });
+  $("dmThreadBack").addEventListener("click", () => { closeThread(); renderDms(); });
+  $("dmLogin").addEventListener("click", leaveGuest);
 
   $("partyCreate").addEventListener("click", createParty);
   $("partyLogin").addEventListener("click", leaveGuest);
