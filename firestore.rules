@@ -37,11 +37,18 @@ service cloud.firestore {
               && after.times == before.times.concat([before.last.toMillis()]))
             || (k > 0 && before.clock == 0 && after.moves == before.moves[0:k - 1]));
       }
+      // The owner can't change a game that's being played, only start a fresh one.
+      function matchOk() {
+        let b = resource.data.match;
+        let a = request.resource.data.match;
+        return a == b || a == null
+          || ((b == null || a.id != b.id) && a.moves.size() == 0 && a.times.size() == 0 && a.last == request.time);
+      }
       allow get: if signedIn();
       allow create: if signedIn() && code.matches('[A-Z2-9]{5}')
         && request.resource.data.owner == request.auth.uid;
       allow update: if signedIn()
-        && ((isOwner() && request.resource.data.owner == resource.data.owner) || moveOk());
+        && ((isOwner() && request.resource.data.owner == resource.data.owner && matchOk()) || moveOk());
       allow delete: if signedIn() && isOwner();
 
       match /members/{uid} {
