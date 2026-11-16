@@ -14,7 +14,7 @@ service cloud.firestore {
 
     match /usernames/{name} {
       allow get: if true;
-      allow create: if request.auth != null
+      allow create: if request.auth != null && !isGuest()
         && request.resource.data.uid == request.auth.uid
         && name.matches('[a-z0-9_]{3,16}')
         && request.resource.data.name.lower() == name
