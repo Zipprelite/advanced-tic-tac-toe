@@ -554,6 +554,20 @@ button, .cell { touch-action: manipulation; }
               </div>
               <p class="note" id="dmSyncNote"></p>
             </div>
+            <div class="group">
+              <span class="label">You play</span>
+              <div class="seg" role="group" aria-label="You play">
+                <button type="button" data-iside="1">Red</button>
+                <button type="button" data-iside="2">Blue</button>
+              </div>
+            </div>
+            <div class="group">
+              <span class="label">Goes first</span>
+              <div class="seg" role="group" aria-label="Goes first">
+                <button type="button" data-ifirst="1">Red</button>
+                <button type="button" data-ifirst="2">Blue</button>
+              </div>
+            </div>
             <div class="group" id="dmTimerGroup">
               <span class="label">Timer</span>
               <div class="seg" role="group" aria-label="Timer">
@@ -762,6 +776,13 @@ button, .cell { touch-action: manipulation; }
             </div>
             <p class="note" id="partyTimerNote"></p>
           </div>
+          <div class="group">
+            <span class="label" id="pfLabel">Goes first</span>
+            <div class="seg" role="group" aria-labelledby="pfLabel">
+              <button type="button" data-pfirst="1">Red</button>
+              <button type="button" data-pfirst="2">Blue</button>
+            </div>
+          </div>
           <div class="extras-list" id="partyExtras"></div>
           <p class="note" id="partyStartNote"></p>
           <button type="button" class="btn primary start" id="partyStart">Start game</button>
@@ -841,6 +862,7 @@ button, .cell { touch-action: manipulation; }
             <div class="endbtns">
               <button type="button" class="btn primary" id="endNew">New game</button>
               <button type="button" class="btn" id="endMenu">Menu</button>
+              <button type="button" class="btn" id="endView">View board</button>
             </div>
           </div>
         </div>
@@ -913,7 +935,7 @@ button, .cell { touch-action: manipulation; }
       if (diff === "medium" && Math.random() < 0.35) return winNow !== undefined ? winNow : rnd(moves);
       return rnd(Normal.solve(s, 0).moves);
     },
-    hint: (s, n) => n ? "Get three in a row." : "Red goes first.",
+    hint: (s, n) => n ? "Get three in a row." : NAME[s.turn] + " goes first.",
     drawText: "The board is full and nobody got three in a row.",
     delay: 350,
 
@@ -1005,7 +1027,7 @@ button, .cell { touch-action: manipulation; }
     },
     hint(s, n) {
       if (s.next >= 0) return "Play in the " + POS[s.next] + " board.";
-      return n ? "Play in any open board." : "Red goes first. Play anywhere.";
+      return n ? "Play in any open board." : NAME[s.turn] + " goes first. Play anywhere.";
     },
     drawText: "No one can line up three boards.",
     delay: 280,
@@ -1155,7 +1177,7 @@ button, .cell { touch-action: manipulation; }
       const where = s.game < 0 ? "Play anywhere open."
         : s.board >= 0 ? "Play in the " + POS[s.board] + " board of the " + POS[s.game] + " game."
         : "Play in any open board of the " + POS[s.game] + " game.";
-      if (!n) return "Red goes first. Play anywhere on the board.";
+      if (!n) return NAME[s.turn] + " goes first. Play anywhere on the board.";
       if (s.jump >= 0) return s.game < 0 ? "Board won! That game is finished, so play anywhere." : "Board won! Play jumps to the " + (s.board >= 0 ? POS[s.board] + " board of the " : "") + POS[s.jump] + " game.";
       return where;
     },
@@ -1339,7 +1361,7 @@ button, .cell { touch-action: manipulation; }
       return best[0];
     },
     hint(s, n) {
-      if (!n) return "Red goes first. Play anywhere.";
+      if (!n) return NAME[s.turn] + " goes first. Play anywhere.";
       if (s.sup < 0) return (s.jump ? "Jump! That's finished, so play" : "Play") + " anywhere open.";
       const sup = SUPNAME[s.sup] + " Supreme game";
       const where = s.game < 0 ? "anywhere in the " + sup
@@ -1532,7 +1554,7 @@ button, .cell { touch-action: manipulation; }
       return mcts(Cube, s, diff === "medium" ? 300 : 1500);
     },
     hint(s, n) {
-      if (!n) return "Red goes first. Claim any cube. Most lines wins.";
+      if (!n) return NAME[s.turn] + " goes first. Claim any cube. Most lines wins.";
       return "Lines so far: Red " + s.score[1] + ", Blue " + s.score[2] + ".";
     },
     scoreText: s => "Final count: Red " + plural(s.score[1], "line") + ", Blue " + plural(s.score[2], "line") + ".",
@@ -1906,10 +1928,12 @@ button, .cell { touch-action: manipulation; }
 
     // End-of-game message over a faded board.
     const justEnded = !!s.winner && popMove !== undefined;
-    board.classList.toggle("ended", !!s.winner || leftMid);
-    board.classList.toggle("ended-anim", justEnded);
+    if (!s.winner && !leftMid) peek = false;
+    const showEnd = (!!s.winner || leftMid) && !peek;
+    board.classList.toggle("ended", showEnd);
+    board.classList.toggle("ended-anim", justEnded && showEnd);
     endOv.classList.toggle("anim", justEnded);
-    endOv.hidden = !s.winner && !leftMid;
+    endOv.hidden = !showEnd;
     if (s.winner || leftMid) {
       const card = endOv.firstElementChild;
       const endNew = $("endNew"), endText = $("endText");
@@ -2085,11 +2109,19 @@ button, .cell { touch-action: manipulation; }
     }, G.delay);
   }
 
+  // A new game's starting state. Online games carry their extra rules and who goes first.
+  function freshState() {
+    const s = G.newState();
+    if (online && (G === Supreme || G === Mega)) s.opts = online.opts || {};
+    if (online && online.first === 2) s.turn = 2;
+    return s;
+  }
+  let peek = false;   // "View board" hides the end-of-game card so you can look at the finished board
   function newGame() {
+    peek = false;
     gameId++;
     thinking = false; counted = false;
-    state = G.newState();
-    if (online && (G === Supreme || G === Mega)) state.opts = online.opts;
+    state = freshState();
     history = [];
     render();
     maybeComputer();
@@ -3034,6 +3066,10 @@ button, .cell { touch-action: manipulation; }
       b.setAttribute("aria-pressed", String(+b.dataset.ptimer === mins));
       b.disabled = !owner;
     }
+    for (const b of document.querySelectorAll("[data-pfirst]")) {
+      b.setAttribute("aria-pressed", String(+b.dataset.pfirst === (d.first === 2 ? 2 : 1)));
+      b.disabled = !owner;
+    }
     $("partyTimerNote").textContent = mins ? "Each player gets " + mins / 2 + " minutes. Run out and you lose. No undo in timed games." : "No time limit.";
     const ex = $("partyExtras");
     ex.innerHTML = "";
@@ -3088,7 +3124,7 @@ button, .cell { touch-action: manipulation; }
     pref(p.code).update({
       match: { id: newId(), game: d.game, opts, red: d.red, blue: d.blue,
         redName: memberName(p, d.red), blueName: memberName(p, d.blue), moves: [],
-        times: [], last: stamp(), clock: (d.timer || 0) * 30000 }
+        times: [], last: stamp(), clock: (d.timer || 0) * 30000, first: d.first === 2 ? 2 : 1 }
     }).catch(e => { $("partyStartNote").textContent = fbErrorText(e); });
   }
 
@@ -3101,7 +3137,7 @@ button, .cell { touch-action: manipulation; }
     }
     if (!online || !online.party || online.matchId !== m.id) {
       const side = m.red === p.me ? 1 : m.blue === p.me ? 2 : 0;
-      online = { party: true, matchId: m.id, side, names: { 1: m.redName, 2: m.blueName },
+      online = { party: true, matchId: m.id, side, first: m.first === 2 ? 2 : 1, names: { 1: m.redName, 2: m.blueName },
         oppName: side === 1 ? m.blueName : m.redName, opts: m.opts || {}, clock: m.clock || 0, started: true, left: false, leftName: "", moves: [] };
       if (!first) return openPartyGame();   // a new game started: everyone goes to it
     }
@@ -3139,8 +3175,7 @@ button, .cell { touch-action: manipulation; }
       return render(mv);
     }
     // An undo (or a jump of several moves): replay the game from the start.
-    state = G.newState();
-    if (G === Supreme || G === Mega) state.opts = online.opts;
+    state = freshState();
     history = []; online.moves = [];
     for (const m of ms) {
       if (state.winner || !G.legal(state).includes(m)) break;
@@ -3181,14 +3216,14 @@ button, .cell { touch-action: manipulation; }
   function clockInfo(m, now) {
     const clock = (m && m.clock) || 0;
     if (!clock) return null;
-    const used = { 1: 0, 2: 0 }, ms = m.moves || [], starts = m.times || [];
+    const used = { 1: 0, 2: 0 }, ms = m.moves || [], starts = m.times || [], f = m.first === 2 ? 2 : 1;
     const last = tms(m.last) || now;
     for (let i = 0; i < ms.length; i++) {
-      const side = i % 2 === 0 ? 1 : 2, end = i + 1 < ms.length ? starts[i + 1] : last;
+      const side = i % 2 === 0 ? f : 3 - f, end = i + 1 < ms.length ? starts[i + 1] : last;
       used[side] += end - (starts[i] || end);
       if (used[side] > clock) return { clock, used, flagged: side, at: i, last, running: 0 };
     }
-    const running = ms.length % 2 === 0 ? 1 : 2;
+    const running = ms.length % 2 === 0 ? f : 3 - f;
     used[running] += Math.max(0, now - last);
     return { clock, used, flagged: used[running] > clock ? running : 0, at: ms.length, last, running };
   }
@@ -3314,27 +3349,29 @@ button, .cell { touch-action: manipulation; }
     if (resultCache.has(key)) return resultCache.get(key);
     if (!G2) return 0;
     const st = G2.newState();
+    if (g.first === 2) st.turn = 2;
     if (st.opts) st.opts = g.opts || {};
     for (const m of g.moves || []) { if (st.winner) break; G2.apply(st, m); }
     resultCache.set(key, st.winner);
     return st.winner;
   }
+  const both = g => !!(g.red && g.blue);
   function asyncStatus(g, uid) {
     const side = g.red === uid ? 1 : 2, n = (g.moves || []).length;
-    if (!g.blue) return side === 1 ? { k: 3, text: "Invite sent to " + (g.inviteeName || "them") + ". Waiting for them to accept." } : { k: 1, text: "Invited you. Accept it in Messages." };
+    if (!both(g)) return (g.owner || g.red) === uid ? { k: 3, text: "Invite sent to " + (g.inviteeName || "them") + ". Waiting for them to accept." } : { k: 1, text: "Invited you. Accept it in Messages." };
     if (g.done || g.resigned) {
       const w = asyncWinner(g);
       const how = g.resigned ? (g.resigned === side ? "You resigned" : "They resigned") + ". " : "";
       return { k: 4, text: how + (w === 3 ? "It's a draw." : w === side ? "You won!" : w ? "You lost." : "Finished.") };
     }
-    const turn = n % 2 === 0 ? 1 : 2;
+    const f = g.first === 2 ? 2 : 1, turn = n % 2 === 0 ? f : 3 - f;
     return { k: turn === side ? 1 : 2, text: (turn === side ? "Your turn" : "Their turn") + " · " + n + (n === 1 ? " move" : " moves") };
   }
 
   function renderAsyncList() {
     const ul = $("asyncList"), l = alist;
     ul.innerHTML = "";
-    const rows = l ? l.games.map(g => ({ g, st: asyncStatus(g, l.uid) })) : [];
+    const rows = l ? l.games.filter(g => !(g.hidden || []).includes(l.uid)).map(g => ({ g, st: asyncStatus(g, l.uid) })) : [];
     rows.sort((a, b) => a.st.k - b.st.k || (tms(b.g.updated) || 0) - (tms(a.g.updated) || 0));
     $("asyncEmpty").textContent = guest ? "Unsynced games start from an invite in Messages, which needs an account."
       : !l || !l.loaded ? "Loading your games…" : rows.length ? "" : "No unsynced games yet. To start one, invite someone in Messages.";
@@ -3345,7 +3382,7 @@ button, .cell { touch-action: manipulation; }
       info.className = "ainfo"; stt.className = "ast";
       b.textContent = GAMES[g.game] ? GAMES[g.game].title : g.game;
       const side = g.red === l.uid ? 1 : 2;
-      info.append(b, " vs " + (g.blue ? (side === 1 ? g.blueName : g.redName) : g.inviteeName || "…"));
+      info.append(b, " vs " + (both(g) ? (side === 1 ? g.blueName : g.redName) : g.inviteeName || "…"));
       stt.textContent = st.text;
       info.appendChild(stt);
       const btns = document.createElement("div");
@@ -3356,9 +3393,14 @@ button, .cell { touch-action: manipulation; }
         x.addEventListener("click", fn);
         btns.appendChild(x);
       };
-      if (g.blue) add(st.k === 1 ? "Play" : "Open", st.k === 1, () => openAsync(g.code));
-      if (!g.blue || st.k === 4) add(g.blue ? "Remove" : "Cancel", false, () => {
-        if (!g.blue || confirm("Remove this game? It goes for both players.")) gref(g.code).delete().catch(e => asyncErr(fbErrorText(e)));
+      if (both(g)) add(st.k === 1 ? "Play" : "Open", st.k === 1, () => openAsync(g.code));
+      if (!both(g) || st.k === 4) add(both(g) ? "Remove" : "Cancel", false, () => {
+        if (!both(g)) return gref(g.code).delete().catch(e => asyncErr(fbErrorText(e)));
+        const other = side === 1 ? g.blueName : g.redName, hidden = g.hidden || [];
+        if (!confirm("Remove this game from your list? " + other + " can still open it.")) return;
+        // Once both players have removed it, it's deleted for good.
+        if (hidden.includes(side === 1 ? g.blue : g.red)) gref(g.code).delete().catch(e => asyncErr(fbErrorText(e)));
+        else gref(g.code).update({ hidden: hidden.concat(l.uid) }).catch(e => asyncErr(fbErrorText(e)));
       });
       li.append(info, btns);
       ul.appendChild(li);
@@ -3369,13 +3411,15 @@ button, .cell { touch-action: manipulation; }
   }
 
   // Make an unsynced game for an invite. Only the invited player can join it.
-  async function createUnsynced(user, key, opts, invitee, inviteeName) {
+  async function createUnsynced(user, key, opts, invitee, inviteeName, side, first) {
     for (let i = 0; i < 5; i++) {
       const code = newCode();
       const made = await fb.db.runTransaction(async t => {
         if ((await t.get(gref(code))).exists) return false;
-        t.set(gref(code), { game: key, opts, red: user.uid, blue: "", redName: username, blueName: "", invitee, inviteeName,
-          players: [user.uid], moves: [], done: false, resigned: 0, updated: stamp() });
+        const blue = side === 2;
+        t.set(gref(code), { game: key, opts, owner: user.uid, first,
+          red: blue ? "" : user.uid, blue: blue ? user.uid : "", redName: blue ? "" : username, blueName: blue ? username : "",
+          invitee, inviteeName, players: [user.uid], moves: [], done: false, resigned: 0, updated: stamp() });
         return true;
       });
       if (made) return code;
@@ -3393,11 +3437,11 @@ button, .cell { touch-action: manipulation; }
       if (!snap.exists) return asyncErr("That game was cancelled or removed.");
       const g = snap.data();
       if (g.red !== user.uid && g.blue !== user.uid) {
-        if (g.blue) return asyncErr("That game already has two players.");
+        if (both(g)) return asyncErr("That game already has two players.");
         if (g.invitee !== user.uid) return asyncErr("That invite is for someone else.");
-        await gref(code).update({ blue: user.uid, blueName: username, players: [g.red, user.uid], updated: stamp() });
-      }
-      if (g.red === user.uid && !g.blue) return asyncErr("Waiting for " + (g.inviteeName || "them") + " to accept your invite.");
+        const slot = g.red ? { blue: user.uid, blueName: username } : { red: user.uid, redName: username };
+        await gref(code).update(Object.assign(slot, { players: [g.owner || g.red || g.blue, user.uid], updated: stamp() }));
+      } else if (!both(g)) return asyncErr("Waiting for " + (g.inviteeName || "them") + " to accept your invite.");
       watchAsyncList();
       openAsync(code);
     } catch (e) { asyncErr(fbErrorText(e)); }
@@ -3416,10 +3460,10 @@ button, .cell { touch-action: manipulation; }
     if (agame !== a) return;
     if (!snap.exists) return asyncGone(a, "That game was removed.");
     const d = a.doc = snap.data();
-    if (!d.blue || !GAMES[d.game]) return asyncGone(a, "Nobody has joined that game yet.");
+    if (!both(d) || !GAMES[d.game]) return asyncGone(a, "Nobody has joined that game yet.");
     if (!online || online.async !== a.code) {
       const side = d.red === a.me ? 1 : d.blue === a.me ? 2 : 0;
-      online = { async: a.code, side, names: { 1: d.redName, 2: d.blueName }, oppName: side === 1 ? d.blueName : d.redName,
+      online = { async: a.code, side, first: d.first === 2 ? 2 : 1, names: { 1: d.redName, 2: d.blueName }, oppName: side === 1 ? d.blueName : d.redName,
         opts: d.opts || {}, clock: 0, started: true, left: false, leftName: "", moves: [] };
       gameKey = d.game; G = GAMES[d.game];
       try { sessionStorage.setItem("att-async", a.code); } catch (e) {}
@@ -3643,13 +3687,15 @@ button, .cell { touch-action: manipulation; }
   // ---------- Invites to play ----------
   // Live: the inviter waits in a game room (a private party) until the other player joins.
   // Unsynced: a saved game that shows up in Unsynced for both players once it's accepted.
-  let inv = { game: "ultimate", sync: "live", timer: 0, precise: false };
+  let inv = { game: "ultimate", sync: "live", timer: 0, precise: false, side: 1, first: 1 };
   try { inv = Object.assign(inv, JSON.parse(localStorage.getItem("att-invite")) || {}); } catch (e) {}
   function renderInvite() {
     for (const b of document.querySelectorAll("[data-igame]")) b.setAttribute("aria-pressed", b.dataset.igame === inv.game);
     for (const b of document.querySelectorAll("[data-isync]")) b.setAttribute("aria-pressed", b.dataset.isync === inv.sync);
     for (const b of document.querySelectorAll("[data-itimer]")) b.setAttribute("aria-pressed", +b.dataset.itimer === inv.timer);
     for (const b of document.querySelectorAll("[data-iprecise]")) b.setAttribute("aria-pressed", (b.dataset.iprecise === "1") === !!inv.precise);
+    for (const b of document.querySelectorAll("[data-iside]")) b.setAttribute("aria-pressed", +b.dataset.iside === inv.side);
+    for (const b of document.querySelectorAll("[data-ifirst]")) b.setAttribute("aria-pressed", +b.dataset.ifirst === inv.first);
     $("dmTimerGroup").hidden = inv.sync !== "live";
     $("dmPreciseGroup").hidden = !EXTRAS[inv.game];
     $("dmSyncNote").textContent = inv.sync === "live"
@@ -3661,16 +3707,18 @@ button, .cell { touch-action: manipulation; }
   for (const b of document.querySelectorAll("[data-isync]")) b.addEventListener("click", () => setInv("sync", b.dataset.isync));
   for (const b of document.querySelectorAll("[data-itimer]")) b.addEventListener("click", () => setInv("timer", +b.dataset.itimer));
   for (const b of document.querySelectorAll("[data-iprecise]")) b.addEventListener("click", () => setInv("precise", b.dataset.iprecise === "1"));
+  for (const b of document.querySelectorAll("[data-iside]")) b.addEventListener("click", () => setInv("side", +b.dataset.iside));
+  for (const b of document.querySelectorAll("[data-ifirst]")) b.addEventListener("click", () => setInv("first", +b.dataset.ifirst));
   $("dmInviteBtn").addEventListener("click", () => { $("dmInvite").hidden = !$("dmInvite").hidden; renderInvite(); });
   $("dmInviteCancel").addEventListener("click", () => { $("dmInvite").hidden = true; });
 
   // A fresh private game room for a live invite.
-  async function newRoom(user, game, opts, timer) {
+  async function newRoom(user, game, opts, timer, side, first) {
     for (let i = 0; i < 5; i++) {
       const code = newCode();
       const made = await fb.db.runTransaction(async t => {
         if ((await t.get(pref(code))).exists) return false;
-        t.set(pref(code), { owner: user.uid, game, opts, red: user.uid, blue: "", timer, match: null, created: stamp() });
+        t.set(pref(code), { owner: user.uid, game, opts, red: side === 2 ? "" : user.uid, blue: side === 2 ? user.uid : "", timer, first, match: null, created: stamp() });
         return true;
       });
       if (made) return code;
@@ -3684,18 +3732,20 @@ button, .cell { touch-action: manipulation; }
     const other = dmOther(c), otherName = (c.names || {})[other] || "them";
     const key = AGAMES.includes(inv.game) ? inv.game : "ultimate", title = GAMES[key].title;
     const opts = EXTRAS[key] ? { precise: !!inv.precise } : {};
+    const side = inv.side === 2 ? 2 : 1, first = inv.first === 2 ? 2 : 1;
+    const roles = " You'd play " + NAME[3 - side] + ", and " + (first === side ? "I" : "you") + " go first.";
     const btn = $("dmInviteSend");
     btn.disabled = true; dmErr("");
     try {
       const user = fb.auth.currentUser;
       if (inv.sync === "unsynced") {
-        const code = await createUnsynced(user, key, opts, other, otherName);
-        await sendDm(id, "Invited you to an unsynced game of " + title + (opts.precise ? " (Precise jumps)" : "") + ".", { kind: "unsynced", code, game: key });
+        const code = await createUnsynced(user, key, opts, other, otherName, side, first);
+        await sendDm(id, "Invited you to an unsynced game of " + title + (opts.precise ? " (Precise jumps)" : "") + "." + roles, { kind: "unsynced", code, game: key });
         $("dmInvite").hidden = true;
       } else {
         const timer = [0, 10, 30, 60, 90].includes(inv.timer) ? inv.timer : 0;
-        const code = await newRoom(user, key, opts, timer);
-        await sendDm(id, "Invited you to play " + title + " live" + (timer ? ", " + timer + " minutes" : "") + (opts.precise ? ", Precise jumps" : "") + ".", { kind: "live", code, game: key });
+        const code = await newRoom(user, key, opts, timer, side, first);
+        await sendDm(id, "Invited you to play " + title + " live" + (timer ? ", " + timer + " minutes" : "") + (opts.precise ? ", Precise jumps" : "") + "." + roles, { kind: "live", code, game: key });
         $("dmInvite").hidden = true;
         await enterParty(code, user);
       }
@@ -3715,7 +3765,7 @@ button, .cell { touch-action: manipulation; }
     };
     if (iv.kind === "unsynced") {
       const g = alist && alist.games.find(x => x.code === iv.code);
-      if (g && g.blue) { st.textContent = g.done || g.resigned ? "Finished" : "Accepted"; add("Open game", false, () => openAsync(iv.code)); }
+      if (g && both(g)) { st.textContent = g.done || g.resigned ? "Finished" : "Accepted"; add("Open game", false, () => openAsync(iv.code)); }
       else if (mine) st.textContent = g ? "Waiting for them to accept" : "Cancelled";
       else add("Accept", true, () => joinAsync(iv.code));
     } else {
@@ -3738,6 +3788,9 @@ button, .cell { touch-action: manipulation; }
     const done = () => { $("partyCopy").textContent = "Copied!"; setTimeout(() => { $("partyCopy").textContent = "Copy code"; }, 1500); };
     if (navigator.clipboard) navigator.clipboard.writeText(party.code).then(done, () => {});
   });
+  for (const b of document.querySelectorAll("[data-pfirst]")) b.addEventListener("click", () => {
+    if (party && party.doc && party.doc.owner === party.me) pref(party.code).update({ first: +b.dataset.pfirst }).catch(() => {});
+  });
   for (const b of document.querySelectorAll("[data-ptimer]")) b.addEventListener("click", () => {
     if (party && party.doc && party.doc.owner === party.me) pref(party.code).update({ timer: +b.dataset.ptimer }).catch(() => {});
   });
@@ -3755,6 +3808,7 @@ button, .cell { touch-action: manipulation; }
   $("startBtn").addEventListener("click", startGame);
   $("endNew").addEventListener("click", () => online ? requestRematch() : newGame());
   $("restartBtn").addEventListener("click", newGame);
+  $("endView").addEventListener("click", () => { peek = true; render(); });
   // Rules screen, opened from the Rules button under each game on the menu.
   let rulesKey = "normal";
   function openRules(key) {
