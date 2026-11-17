@@ -49,6 +49,8 @@ body {
   font-size: 15px;
   line-height: 1.5;
 }
+/* On the game screen, no extra space under the board, so the page doesn't scroll. */
+body.in-play .wrap { padding-bottom: 16px; }
 body.turn-2 { --turn: var(--blue); --turn-soft: var(--blue-soft); }
 
 .wrap {
@@ -2135,7 +2137,7 @@ button, .cell { touch-action: manipulation; }
     const wrap = $("boardWrap");
     if ($("play").hidden) return;
     const top = wrap.getBoundingClientRect().top + window.scrollY;
-    const fit = Math.floor(window.innerHeight - top - 16);
+    const fit = Math.floor(window.innerHeight - top - 17);
     const px = Math.max(260, fit) + "px";
     if (wrap.style.maxWidth !== px) { wrap.style.maxWidth = px; wrap.style.marginInline = "auto"; }
   }
@@ -2284,6 +2286,7 @@ button, .cell { touch-action: manipulation; }
     clearTimeout(zoomTimer);
     for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "partyScreen", "settingsScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
+    document.body.classList.toggle("in-play", id === "play");
     window.scrollTo(0, 0);
   }
 
