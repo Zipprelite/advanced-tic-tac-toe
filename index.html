@@ -51,6 +51,25 @@ body {
 }
 /* On the game screen, no extra space under the board, so the page doesn't scroll. */
 body.in-play .wrap { padding-bottom: 16px; }
+/* Wide screens: buttons and game info in a column left of the board, so the board can use the full height. */
+body.in-play .wrap { max-width: none; }
+#play:not(.sidebar) { max-width: 620px; }
+#play.wide:not(.sidebar) { max-width: 960px; }
+#play.sidebar { max-width: none; width: fit-content; display: grid; grid-template-columns: 230px var(--bw, 600px); column-gap: 28px; align-items: start; }
+#play.sidebar.chat-right { padding-right: 328px; }
+#play.sidebar .play-chat:not(.side) { grid-column: 2; }
+.play-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+#play.sidebar .app main { width: var(--bw, 600px); }
+#play.sidebar .topbar { flex-direction: column; align-items: stretch; margin: 0; gap: 14px; }
+#play.sidebar .topbar-left { flex-direction: column; align-items: flex-start; gap: 12px; }
+#play.sidebar .topbar-right { gap: 8px; }
+#play.sidebar .vs { margin: 0; text-align: left; }
+#play.sidebar .status { margin: 0; justify-content: flex-start; align-items: flex-start; }
+#play.sidebar .clocks { margin: 0; flex-direction: column; }
+#play.sidebar .meganav { margin: 0; flex-direction: column; align-items: flex-start; }
+#play.sidebar .zoombar { margin: 0; justify-content: flex-start; text-align: left; }
+#play.sidebar .floorbar { margin: 0; max-width: none; }
+#play.sidebar .classic, #play.sidebar .big, #play.sidebar .supreme, #play.sidebar .cube3d { max-width: none; }
 body.turn-2 { --turn: var(--blue); --turn-soft: var(--blue-soft); }
 
 .wrap {
@@ -135,7 +154,7 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .score .sd b { color: var(--ink); }
 
 /* Game screen: just the board, centred */
-#play { max-width: 620px; margin: 0 auto; position: relative; }
+#play { margin: 0 auto; position: relative; }
 .topbar-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .app { display: flex; justify-content: center; }
 .app main { width: 100%; min-width: 0; position: relative; }
@@ -189,7 +208,6 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .big.restricted .small:not(.active):not(.done) { opacity: 0.55; }
 
 /* Supreme board: 9 Ultimate games */
-#play.wide { max-width: 960px; }
 /* Phone zoom for Supreme: the board scales up around one Ultimate game. */
 .board-wrap.sup { overflow: hidden; border-radius: 18px; }
 .supreme { transform-origin: 0 0; transition: transform 0.4s cubic-bezier(.3,.7,.3,1); }
@@ -903,6 +921,7 @@ button, .cell { touch-action: manipulation; }
 
   <!-- ===== Game screen ===== -->
   <section id="play" hidden>
+    <div class="play-side" id="playSide" hidden></div>
     <div class="topbar">
       <div class="topbar-left">
         <button type="button" class="btn back" id="menuBtn">← Menu</button>
@@ -2133,24 +2152,53 @@ button, .cell { touch-action: manipulation; }
   let resizeTimer;
   // Put the game chat beside the board when there's room on the right; otherwise under it.
   // Shrink the board so it fits in the window under the buttons, so Undo and the whole board are on screen together.
+  // On wide screens the buttons and game info move to a column left of the board, and the chat sits on the right.
+  const SIDE_W = 230, GAP = 28, CHAT_W = 300;
+  let homes = null, chatRight = false;
+  function setSidebar(on) {
+    const play = $("play");
+    if (play.classList.contains("sidebar") === on) return;
+    const els = [play.querySelector(".topbar"), $("vsLine"), $("clocks"), $("status"), $("zoomBar"), $("floorBar"), $("megaNavWrap")];
+    if (!homes) homes = els.map(el => ({ el, parent: el.parentNode, next: el.nextSibling }));
+    if (on) for (const el of els) $("playSide").appendChild(el);
+    else for (const h of homes.slice().reverse()) h.parent.insertBefore(h.el, h.next);
+    play.classList.toggle("sidebar", on);
+    $("playSide").hidden = !on;
+  }
   function fitBoard() {
-    const wrap = $("boardWrap");
-    if ($("play").hidden) return;
-    const top = wrap.getBoundingClientRect().top + window.scrollY;
-    const fit = Math.floor(window.innerHeight - top - 17);
-    const px = Math.max(260, fit) + "px";
-    if (wrap.style.maxWidth !== px) { wrap.style.maxWidth = px; wrap.style.marginInline = "auto"; }
+    const play = $("play"), wrap = $("boardWrap");
+    if (play.hidden) return;
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    const wideScreen = vw >= 900 && vw > vh * 1.15;
+    setSidebar(wideScreen);
+    let px;
+    if (wideScreen) {
+      const top = 20, byH = vh - top - 17, room = vw - 32 - SIDE_W - GAP;
+      const chat = !$("playChatSlot").hidden;
+      chatRight = chat && room - GAP - CHAT_W >= Math.min(byH, 420);
+      px = Math.min(byH, chatRight ? room - GAP - CHAT_W : room);
+      if (G === Normal) px = Math.min(px, 620);
+      px = Math.max(260, Math.floor(px));
+      play.style.setProperty("--bw", px + "px");
+    } else {
+      chatRight = false;
+      const top = wrap.getBoundingClientRect().top + window.scrollY;
+      px = Math.max(260, Math.floor(vh - top - 17));
+    }
+    play.classList.toggle("chat-right", wideScreen && chatRight);
+    if (wrap.style.maxWidth !== px + "px") { wrap.style.maxWidth = px + "px"; wrap.style.marginInline = "auto"; }
   }
   function placeChat() {
     fitBoard();
     const slot = $("playChatSlot"), play = $("play"), wrap = $("board");
     if (slot.hidden || play.hidden) return;
     const pr = play.getBoundingClientRect(), br = wrap.getBoundingClientRect();
+    const sb = play.classList.contains("sidebar");
     const room = document.documentElement.clientWidth - br.right - 24 - 16;
-    const side = room >= 220;
+    const side = sb ? chatRight : room >= 220;
     slot.classList.toggle("side", side);
-    slot.style.left = side ? (br.right - pr.left + 24) + "px" : "";
-    slot.style.width = side ? Math.min(room, 360) + "px" : "";
+    slot.style.left = side ? (br.right - pr.left + (sb ? GAP : 24)) + "px" : "";
+    slot.style.width = side ? (sb ? CHAT_W : Math.min(room, 360)) + "px" : "";
     slot.style.top = side ? (br.top - pr.top) + "px" : "";
     slot.style.height = side ? Math.max(br.height, 320) + "px" : "";
   }
