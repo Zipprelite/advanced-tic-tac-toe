@@ -162,12 +162,13 @@ service cloud.firestore {
       }
     }
 
-    // Online dots. Each account writes only its own: on (bool), seen (server time), invisible (bool).
+    // Online dots. Each account writes only its own: on (bool), away (bool), seen (server time), invisible (bool).
     match /presence/{uid} {
       allow get: if signedIn();
       allow create, update: if signedIn() && !isGuest() && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['on', 'seen', 'invisible'])
+        && request.resource.data.keys().hasOnly(['on', 'away', 'seen', 'invisible'])
         && request.resource.data.on is bool
+        && request.resource.data.get('away', false) is bool
         && request.resource.data.seen == request.time
         && request.resource.data.get('invisible', false) is bool;
     }

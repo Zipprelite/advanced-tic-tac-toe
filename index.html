@@ -364,6 +364,11 @@ button, .cell { touch-action: manipulation; }
 .pdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; background: #a0a0a8; flex: none; }
 .pdot.on { background: #22a559; }
 .pdot.off { background: #e0393e; }
+.pdot.away { background: #f08c1a; }
+.zz { display: none; margin-left: 5px; font-size: 14px; font-weight: 800; font-style: italic; color: #f08c1a; letter-spacing: 0.05em; vertical-align: 4px; }
+.zz.on { display: inline-block; animation: zz 2.4s ease-in-out infinite; }
+@keyframes zz { 0% { opacity: 0; transform: translate(0, 3px); } 30%, 70% { opacity: 1; } 100% { opacity: 0; transform: translate(4px, -5px); } }
+@media (prefers-reduced-motion: reduce) { .zz.on { animation: none; } }
 .pdot.hidden { background: #a0a0a8; opacity: 0.6; }
 .fr-list li.in { box-shadow: inset 3px 0 0 var(--blue); }
 .inv-title { font-size: 17px; }
@@ -754,6 +759,14 @@ button, .cell { touch-action: manipulation; }
           <button type="button" id="side-2" class="opt-blue" data-side="2">Blue</button>
         </div>
         <p class="note" id="sideNote"></p>
+      </div>
+      <div class="group" id="preciseGroup" hidden>
+        <span class="label" id="preciseLabel">Precise jumps</span>
+        <div class="seg" role="group" aria-labelledby="preciseLabel">
+          <button type="button" data-lprecise="0">Off</button>
+          <button type="button" data-lprecise="1">On</button>
+        </div>
+        <p class="note" id="preciseNote"></p>
       </div>
       <button type="button" class="btn primary start" id="startBtn">Start game</button>
     </div>
@@ -2021,7 +2034,9 @@ button, .cell { touch-action: manipulation; }
     $("menuBtn").textContent = online && online.party ? "← Party" : online && online.async ? "← Games" : "← Menu";
     $("resignBtn").hidden = !(online && online.async && online.side && !s.winner);
     const vs = $("vsLine");
-    vs.hidden = !online;
+    const localExtras = !online && s.opts && s.opts.precise;
+    vs.hidden = !online && !localExtras;
+    if (localExtras) { vs.innerHTML = ""; const ex = document.createElement("span"); ex.className = "extras"; ex.textContent = "Extra rules: Precise jumps"; vs.appendChild(ex); }
     if (online) {
       vs.innerHTML = "";
       const me = document.createElement("span"), them = document.createElement("span");
@@ -2152,6 +2167,7 @@ button, .cell { touch-action: manipulation; }
   function freshState() {
     const s = G.newState();
     if (online && (G === Supreme || G === Mega)) s.opts = online.opts || {};
+    else if (!online && EXTRAS[gameKey]) s.opts = { precise: !!settings.precise };   // "This device" games pick it on the setup screen
     if (online && online.first === 2) s.turn = 2;
     return s;
   }
@@ -2263,6 +2279,10 @@ button, .cell { touch-action: manipulation; }
     $("oppNote").textContent = ai ? "Play against the computer." : "Two players take turns on this screen. Red goes first.";
     $("diffNote").textContent = DIFF_NOTES[gameKey][settings.diff];
     $("sideNote").textContent = settings.side === 1 ? "Red goes first." : "The computer plays Red and goes first.";
+    const ex = EXTRAS[gameKey] && EXTRAS[gameKey].find(x => x.key === "precise");
+    $("preciseGroup").hidden = !ex;
+    for (const btn of document.querySelectorAll("[data-lprecise]")) btn.setAttribute("aria-pressed", (btn.dataset.lprecise === "1") === !!settings.precise);
+    if (ex) $("preciseNote").textContent = ex.desc;
   }
 
   function openSetup(key) {
@@ -3671,8 +3691,19 @@ button, .cell { touch-action: manipulation; }
   }
 
   // ===== Online dots =====
-  // presence/{uid}: { on, seen, invisible }. While the page is open, an account writes "seen" every minute.
-  // A friend shows green if "on" and "seen" is under 3 minutes old, red if not, grey if they're invisible.
+  // presence/{uid}: { on, away, seen, invisible }. While the page is open, an account writes "seen" every minute.
+  // A friend shows green if "on" and "seen" is under 3 minutes old, orange (with zz) if they're away,
+  // red if not online, grey if they're invisible.
+  // Away = the page is open but in a background tab, the window isn't focused, or no mouse/keys for 5 minutes.
+  const IDLE = 5 * 60000;
+  let lastInput = Date.now(), wasAway = false, noAway = false;
+  const isAway = () => document.hidden || !document.hasFocus() || Date.now() - lastInput > IDLE;
+  function checkAway() { if (pres && isAway() !== wasAway) beat(true); }
+  for (const ev of ["pointerdown", "pointermove", "keydown", "touchstart", "wheel", "scroll"])
+    window.addEventListener(ev, () => { lastInput = Date.now(); if (wasAway && pres && !isAway()) beat(true); }, { passive: true, capture: true });
+  window.addEventListener("focus", checkAway);
+  window.addEventListener("blur", checkAway);
+  setInterval(checkAway, 15000);
   const presRef = uid => fb.db.collection("presence").doc(uid);
   const BEAT = 60000, STALE = 180000;
   let pres = null;          // { uid, invisible, loaded, timer, unsub }
@@ -3696,7 +3727,10 @@ button, .cell { touch-action: manipulation; }
   }
   function beat(on, extra) {
     if (!pres) return Promise.resolve();
-    return presRef(pres.uid).set(Object.assign({ on, seen: stamp() }, extra || {}), { merge: true }).catch(() => {});
+    wasAway = isAway();
+    const send = withAway => presRef(pres.uid).set(Object.assign({ on, seen: stamp() }, withAway ? { away: wasAway } : {}, extra || {}), { merge: true });
+    // If the database rules don't know about "away" yet, keep the dots working without it.
+    return send(!noAway).catch(e => { if (!noAway && e && e.code === "permission-denied") { noAway = true; return send(false).catch(() => {}); } });
   }
   // Stops the heartbeat. With goOffline, tells friends you've gone (used when logging out).
   function stopPresence(goOffline) {
@@ -3709,7 +3743,7 @@ button, .cell { touch-action: manipulation; }
     renderSettings();
     return done;
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && pres) beat(true); paintDots(); });
+  document.addEventListener("visibilitychange", () => { if (pres) beat(true); paintDots(); });
   window.addEventListener("pagehide", () => { if (pres) beat(false); });
   setInterval(paintDots, 20000);
   function watchDots(uids) {
@@ -3725,9 +3759,9 @@ button, .cell { touch-action: manipulation; }
     if (!d) return "off";
     if (d.invisible) return "hidden";
     const t = d.seen && d.seen.toMillis ? d.seen.toMillis() : 0;
-    return d.on && Date.now() + skew - t < STALE ? "on" : "off";
+    return !d.on || Date.now() + skew - t >= STALE ? "off" : d.away ? "away" : "on";
   }
-  const DOT_TEXT = { on: "Online", off: "Offline", hidden: "Invisible" };
+  const DOT_TEXT = { on: "Online", away: "Away", off: "Offline", hidden: "Invisible" };
   function paintDots() {
     for (const el of document.querySelectorAll(".pdot[data-uid]")) {
       const st = dotState(el.dataset.uid);
@@ -3736,6 +3770,7 @@ button, .cell { touch-action: manipulation; }
       el.setAttribute("aria-label", DOT_TEXT[st]);
       el.setAttribute("role", "img");
     }
+    for (const el of document.querySelectorAll(".zz[data-zz]")) el.classList.toggle("on", dotState(el.dataset.zz) === "away");
   }
 
   // ===== Settings =====
@@ -3749,7 +3784,7 @@ button, .cell { touch-action: manipulation; }
     $("invisNote").textContent = guest ? "Invisible needs an account. Log in or create one to use it."
       : !pres ? "Log in to use this." : !ok ? "Loading…"
       : pres.invisible ? "On. Your friends see a grey dot next to your name, whether you're online or not."
-      : "Off. Your friends see a green dot when you're online and a red one when you're not.";
+      : "Off. Your friends see a green dot when you're online, orange when you're away (the website is open but you're not using it), and red when you're offline.";
   }
   for (const b of document.querySelectorAll("[data-invis]")) b.addEventListener("click", () => {
     if (!pres) return;
@@ -3806,7 +3841,11 @@ button, .cell { touch-action: manipulation; }
         ["Remove", false, () => { if (confirm("Remove " + o.name + " from your friends?")) fref(p.id).delete().catch(() => {}); }]]);
       const dot = document.createElement("span");
       dot.className = "pdot"; dot.dataset.uid = o.uid;
-      li.querySelector(".fname").prepend(dot);
+      const zz = document.createElement("span");
+      zz.className = "zz"; zz.dataset.zz = o.uid; zz.textContent = "zz"; zz.setAttribute("aria-hidden", "true");
+      const fname = li.querySelector(".fname");
+      fname.prepend(dot);
+      fname.insertBefore(zz, fname.querySelector(".fdesc"));
     }
     watchDots(friends.map(otherOf));
     paintDots();
@@ -4023,6 +4062,9 @@ button, .cell { touch-action: manipulation; }
   });
   for (const btn of document.querySelectorAll("[data-side]")) btn.addEventListener("click", () => {
     settings.side = +btn.dataset.side; save(); renderSetup();
+  });
+  for (const btn of document.querySelectorAll("[data-lprecise]")) btn.addEventListener("click", () => {
+    settings.precise = btn.dataset.lprecise === "1"; save(); renderSetup();
   });
 
   // ---------- Start ----------
