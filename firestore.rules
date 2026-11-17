@@ -162,6 +162,16 @@ service cloud.firestore {
       }
     }
 
+    // Online dots. Each account writes only its own: on (bool), seen (server time), invisible (bool).
+    match /presence/{uid} {
+      allow get: if signedIn();
+      allow create, update: if signedIn() && !isGuest() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['on', 'seen', 'invisible'])
+        && request.resource.data.on is bool
+        && request.resource.data.seen == request.time
+        && request.resource.data.get('invisible', false) is bool;
+    }
+
     // Friends. The id is the two account ids in order, joined by _. It starts as a request
     // ("pending", from = who asked) and becomes "friends" when the other player accepts.
     match /friends/{id} {

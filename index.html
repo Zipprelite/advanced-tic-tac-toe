@@ -352,6 +352,10 @@ button, .cell { touch-action: manipulation; }
 .fr-list .fdesc { display: block; color: var(--muted); font-size: 13px; font-weight: 500; margin-top: 2px; }
 .fr-list .abtns { display: flex; gap: 6px; flex-wrap: wrap; }
 .fr-list .btn { padding: 6px 12px; font-size: 13px; }
+.pdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; background: #a0a0a8; flex: none; }
+.pdot.on { background: #22a559; }
+.pdot.off { background: #e0393e; }
+.pdot.hidden { background: #a0a0a8; opacity: 0.6; }
 .fr-list li.in { box-shadow: inset 3px 0 0 var(--blue); }
 .inv-title { font-size: 17px; }
 .dm-area .err.ok { color: var(--muted); }
@@ -500,7 +504,7 @@ button, .cell { touch-action: manipulation; }
         <button type="button" id="where-friends" data-where="friends">Friends</button>
         <button type="button" id="where-async" data-where="async">Unsynced</button>
       </div>
-      <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button></p>
+      <p class="who">Playing as <b id="whoName">Player</b> · <button type="button" class="linkbtn" id="changeName">Change</button> · <button type="button" class="linkbtn" id="settingsBtn">Settings</button></p>
     </div>
     <div class="dm-area" id="frArea" hidden>
       <div class="setup-card party-guest" id="frGuest" hidden>
@@ -660,6 +664,23 @@ button, .cell { touch-action: manipulation; }
   </section>
 
   <!-- ===== Rules screen ===== -->
+  <section class="setup" id="settingsScreen" hidden>
+    <button type="button" class="btn back" id="settingsBack">← Menu</button>
+    <div>
+      <h1>Settings</h1>
+    </div>
+    <div class="setup-card">
+      <div class="group">
+        <span class="label">Invisible</span>
+        <div class="seg" role="group" aria-label="Invisible">
+          <button type="button" data-invis="0">Off</button>
+          <button type="button" data-invis="1">On</button>
+        </div>
+        <p class="note" id="invisNote"></p>
+      </div>
+    </div>
+  </section>
+
   <section class="setup" id="rulesScreen" hidden>
     <button type="button" class="btn back" id="rulesBack">← Menu</button>
     <div>
@@ -2179,7 +2200,7 @@ button, .cell { touch-action: manipulation; }
   function showScreen(id) {
     gameId++; thinking = false;
     clearTimeout(zoomTimer);
-    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "partyScreen", "play"]) $(s).hidden = s !== id;
+    for (const s of ["authScreen", "nameScreen", "menu", "rulesScreen", "setup", "queueScreen", "extrasScreen", "partyScreen", "settingsScreen", "play"]) $(s).hidden = s !== id;
     if (id !== "play") document.body.classList.remove("turn-2");
     window.scrollTo(0, 0);
   }
@@ -2390,7 +2411,7 @@ button, .cell { touch-action: manipulation; }
     stopAsyncList();
     stopFriends();
     $("authPass").value = "";
-    fb.auth.signOut();
+    Promise.race([stopPresence(true), new Promise(r => setTimeout(r, 1500))]).then(() => fb.auth.signOut());
   }
 
   function showAuthLoading(text, failed) {
@@ -2535,6 +2556,7 @@ button, .cell { touch-action: manipulation; }
     watchAsyncList();
     renderAsyncList();
     watchFriends();
+    startPresence();
     renderFriends();
     $("menuLede").textContent = msgMode
       ? "Add friends by their username, and invite them to a game. Play it live, or unsynced so you each take your turn whenever you like."
@@ -3538,9 +3560,100 @@ button, .cell { touch-action: manipulation; }
   }
   function stopFriends() {
     if (fr) fr.unsubs.forEach(x => { try { x(); } catch (e) {} });
+    pdots.forEach(w => { try { w.unsub(); } catch (e) {} });
+    pdots.clear();
     fr = null; invTo = null;
     renderFriends();
   }
+
+  // ===== Online dots =====
+  // presence/{uid}: { on, seen, invisible }. While the page is open, an account writes "seen" every minute.
+  // A friend shows green if "on" and "seen" is under 3 minutes old, red if not, grey if they're invisible.
+  const presRef = uid => fb.db.collection("presence").doc(uid);
+  const BEAT = 60000, STALE = 180000;
+  let pres = null;          // { uid, invisible, loaded, timer, unsub }
+  let skew = 0;             // server clock minus this device's clock
+  const pdots = new Map();  // friend uid -> { data, unsub }
+  function startPresence() {
+    const u = fb && fb.auth.currentUser;
+    if (!u || u.isAnonymous || guest) { stopPresence(); return; }
+    if (pres && pres.uid === u.uid) return;
+    stopPresence();
+    const p = pres = { uid: u.uid, invisible: false, loaded: false };
+    p.unsub = presRef(u.uid).onSnapshot(snap => {
+      if (pres !== p) return;
+      const d = snap.data() || {};
+      p.invisible = !!d.invisible; p.loaded = true;
+      if (!snap.metadata.hasPendingWrites && d.seen && d.seen.toMillis) skew = d.seen.toMillis() - Date.now();
+      renderSettings(); paintDots();
+    }, () => {});
+    beat(true);
+    p.timer = setInterval(() => beat(true), BEAT);
+  }
+  function beat(on, extra) {
+    if (!pres) return Promise.resolve();
+    return presRef(pres.uid).set(Object.assign({ on, seen: stamp() }, extra || {}), { merge: true }).catch(() => {});
+  }
+  // Stops the heartbeat. With goOffline, tells friends you've gone (used when logging out).
+  function stopPresence(goOffline) {
+    const p = pres;
+    if (!p) return Promise.resolve();
+    const done = goOffline ? beat(false) : Promise.resolve();
+    clearInterval(p.timer);
+    try { p.unsub(); } catch (e) {}
+    pres = null;
+    renderSettings();
+    return done;
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && pres) beat(true); paintDots(); });
+  window.addEventListener("pagehide", () => { if (pres) beat(false); });
+  setInterval(paintDots, 20000);
+  function watchDots(uids) {
+    for (const [uid, w] of pdots) if (!uids.includes(uid)) { try { w.unsub(); } catch (e) {} pdots.delete(uid); }
+    for (const uid of uids) if (!pdots.has(uid)) {
+      const w = { data: null };
+      pdots.set(uid, w);
+      w.unsub = presRef(uid).onSnapshot(s => { w.data = s.data({ serverTimestamps: "estimate" }) || null; paintDots(); }, () => {});
+    }
+  }
+  function dotState(uid) {
+    const d = (pdots.get(uid) || {}).data;
+    if (!d) return "off";
+    if (d.invisible) return "hidden";
+    const t = d.seen && d.seen.toMillis ? d.seen.toMillis() : 0;
+    return d.on && Date.now() + skew - t < STALE ? "on" : "off";
+  }
+  const DOT_TEXT = { on: "Online", off: "Offline", hidden: "Invisible" };
+  function paintDots() {
+    for (const el of document.querySelectorAll(".pdot[data-uid]")) {
+      const st = dotState(el.dataset.uid);
+      el.className = "pdot " + st;
+      el.title = DOT_TEXT[st];
+      el.setAttribute("aria-label", DOT_TEXT[st]);
+      el.setAttribute("role", "img");
+    }
+  }
+
+  // ===== Settings =====
+  function renderSettings() {
+    const ok = !!pres && pres.loaded;
+    for (const b of document.querySelectorAll("[data-invis]")) {
+      b.disabled = !ok;
+      b.setAttribute("aria-pressed", ok && String(+pres.invisible) === b.dataset.invis);
+    }
+    $("invisNote").textContent = guest ? "Invisible needs an account. Log in or create one to use it."
+      : !pres ? "Log in to use this." : !ok ? "Loading…"
+      : pres.invisible ? "On. Your friends see a grey dot next to your name, whether you're online or not."
+      : "Off. Your friends see a green dot when you're online and a red one when you're not.";
+  }
+  for (const b of document.querySelectorAll("[data-invis]")) b.addEventListener("click", () => {
+    if (!pres) return;
+    pres.invisible = b.dataset.invis === "1";
+    renderSettings();
+    beat(true, { invisible: pres.invisible });
+  });
+  $("settingsBtn").addEventListener("click", () => { renderSettings(); showScreen("settingsScreen"); });
+  $("settingsBack").addEventListener("click", showMenu);
 
   // What an invite is: "Mega live, 10 min. You'd play Blue, Red goes first."
   function inviteDesc(iv, mine) {
@@ -3571,6 +3684,7 @@ button, .cell { touch-action: manipulation; }
       }
       li.append(info, box);
       ul.appendChild(li);
+      return li;
     };
     // Friend requests: ones sent to you, then ones you sent.
     const reqs = $("frReqs"), outgoing = f.pairs.filter(p => p.status === "pending" && p.from === f.uid);
@@ -3583,9 +3697,14 @@ button, .cell { touch-action: manipulation; }
     list.innerHTML = "";
     for (const p of friends) {
       const o = { uid: otherOf(p), name: pname2(p) };
-      row(list, o.name, "", [["Invite to play", true, () => { invTo = o; frErr(""); renderFriends(); renderInvite(); $("dmInvite").scrollIntoView({ block: "nearest", behavior: "smooth" }); }],
+      const li = row(list, o.name, "", [["Invite to play", true, () => { invTo = o; frErr(""); renderFriends(); renderInvite(); $("dmInvite").scrollIntoView({ block: "nearest", behavior: "smooth" }); }],
         ["Remove", false, () => { if (confirm("Remove " + o.name + " from your friends?")) fref(p.id).delete().catch(() => {}); }]]);
+      const dot = document.createElement("span");
+      dot.className = "pdot"; dot.dataset.uid = o.uid;
+      li.querySelector(".fname").prepend(dot);
     }
+    watchDots(friends.map(otherOf));
+    paintDots();
     $("frEmpty").textContent = !f.loaded ? "Loading…" : friends.length ? "" : "No friends yet. Add someone by their username.";
     // The invite panel.
     if (invTo && !friends.some(p => otherOf(p) === invTo.uid)) invTo = null;
