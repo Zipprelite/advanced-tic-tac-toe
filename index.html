@@ -56,7 +56,6 @@ body.in-play .wrap { max-width: none; }
 #play:not(.sidebar) { max-width: 620px; }
 #play.wide:not(.sidebar) { max-width: 960px; }
 #play.sidebar { max-width: none; width: fit-content; display: grid; grid-template-columns: 230px var(--bw, 600px); column-gap: 28px; align-items: start; }
-#play.sidebar.chat-right { padding-right: 328px; }
 #play.sidebar .play-chat:not(.side) { grid-column: 2; }
 .play-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 #play.sidebar .app main { width: var(--bw, 600px); }
@@ -2153,8 +2152,8 @@ button, .cell { touch-action: manipulation; }
   // Put the game chat beside the board when there's room on the right; otherwise under it.
   // Shrink the board so it fits in the window under the buttons, so Undo and the whole board are on screen together.
   // On wide screens the buttons and game info move to a column left of the board, and the chat sits on the right.
-  const SIDE_W = 230, GAP = 28, CHAT_W = 300;
-  let homes = null, chatRight = false;
+  const SIDE_W = 230, GAP = 28, CHAT_W = 400;
+  let homes = null, chatRight = false, chatW = CHAT_W;
   function setSidebar(on) {
     const play = $("play");
     if (play.classList.contains("sidebar") === on) return;
@@ -2175,13 +2174,17 @@ button, .cell { touch-action: manipulation; }
     if (wideScreen) {
       const top = 20, byH = vh - top - 17, room = vw - 32 - SIDE_W - GAP;
       const chat = !$("playChatSlot").hidden;
-      chatRight = chat && room - GAP - CHAT_W >= Math.min(byH, 420);
-      px = Math.min(byH, chatRight ? room - GAP - CHAT_W : room);
+      // The chat is 400px wide, or as narrow as 300px if that keeps it beside the board.
+      chatW = Math.max(300, Math.min(CHAT_W, room - GAP - Math.min(byH, 420)));
+      chatRight = chat && room - GAP - chatW >= Math.min(byH, 420);
+      px = Math.min(byH, chatRight ? room - GAP - chatW : room);
+      play.style.paddingRight = chatRight ? (chatW + GAP) + "px" : "";
       if (G === Normal) px = Math.min(px, 620);
       px = Math.max(260, Math.floor(px));
       play.style.setProperty("--bw", px + "px");
     } else {
       chatRight = false;
+      play.style.paddingRight = "";
       const top = wrap.getBoundingClientRect().top + window.scrollY;
       px = Math.max(260, Math.floor(vh - top - 17));
     }
@@ -2198,7 +2201,7 @@ button, .cell { touch-action: manipulation; }
     const side = sb ? chatRight : room >= 220;
     slot.classList.toggle("side", side);
     slot.style.left = side ? (br.right - pr.left + (sb ? GAP : 24)) + "px" : "";
-    slot.style.width = side ? (sb ? CHAT_W : Math.min(room, 360)) + "px" : "";
+    slot.style.width = side ? (sb ? chatW : Math.min(room, 360)) + "px" : "";
     slot.style.top = side ? (br.top - pr.top) + "px" : "";
     slot.style.height = side ? Math.max(br.height, 320) + "px" : "";
   }
