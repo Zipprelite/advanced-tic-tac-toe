@@ -435,9 +435,9 @@ button, .cell { touch-action: manipulation; }
 .emoji-grid button { appearance: none; border: 0; background: none; font-size: 22px; line-height: 1; padding: 6px 0; border-radius: 8px; cursor: pointer; }
 .emoji-grid button:hover, .emoji-grid button:focus-visible { background: var(--surface); }
 .gif-pop { display: flex; flex-direction: column; gap: 8px; }
-.gif-grid { columns: 3 90px; column-gap: 6px; max-height: 240px; overflow-y: auto; }
-.gif-grid button { appearance: none; border: 0; padding: 0; margin: 0 0 6px; background: var(--surface); border-radius: 8px; overflow: hidden; cursor: pointer; display: block; width: 100%; }
-.gif-grid img { display: block; width: 100%; height: auto; }
+.gif-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 96px; gap: 6px; max-height: 240px; overflow-x: hidden; overflow-y: auto; align-content: start; }
+.gif-grid button { appearance: none; border: 0; padding: 0; margin: 0; background: var(--surface); border-radius: 8px; overflow: hidden; cursor: pointer; display: block; width: 100%; height: 100%; }
+.gif-grid img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .gif-grid button:focus-visible { outline: 3px solid var(--blue); }
 .gif-foot { font-size: 11px; color: var(--muted); text-align: right; }
 /* Beside the board the chat has a fixed height, so an open picker shrinks to fit. */
@@ -3470,23 +3470,34 @@ button, .cell { touch-action: manipulation; }
   }
   $("emojiBtn").addEventListener("click", () => togglePop("emojiPop", "emojiBtn"));
   $("gifBtn").hidden = !GIPHY_KEY;
-  let gifReq = 0, gifTimer = 0;
-  async function loadGifs(q) {
-    const id = ++gifReq, grid = $("gifGrid");
+  // Scrolling to the bottom of the GIF list loads more (each load is one GIPHY call, so it's limited).
+  let gifReq = 0, gifTimer = 0, gifQ = "", gifOffset = 0, gifMore = false, gifBusy = false;
+  const GIF_PAGE = 24, GIF_MAX = 120;
+  async function loadGifs(q, more) {
+    const grid = $("gifGrid");
+    if (!more) { gifQ = q; gifOffset = 0; gifMore = false; }
+    else if (!gifMore || gifBusy) return;
+    const id = ++gifReq;
+    gifBusy = true;
     $("gifNote").textContent = "Loading…";
     try {
-      const url = "https://api.giphy.com/v1/gifs/" + (q ? "search" : "trending") + "?api_key=" + encodeURIComponent(GIPHY_KEY) +
-        "&limit=24&rating=pg&bundle=messaging_non_clips" + (q ? "&q=" + encodeURIComponent(q) : "");
+      const url = "https://api.giphy.com/v1/gifs/" + (gifQ ? "search" : "trending") + "?api_key=" + encodeURIComponent(GIPHY_KEY) +
+        "&limit=" + GIF_PAGE + "&offset=" + gifOffset + "&rating=pg&bundle=messaging_non_clips" + (gifQ ? "&q=" + encodeURIComponent(gifQ) : "");
       const res = await fetch(url);
       if (!res.ok) throw new Error(res.status);
-      const data = (await res.json()).data || [];
+      const json = await res.json(), data = json.data || [];
       if (id !== gifReq) return;
-      grid.innerHTML = "";
+      if (!more) { grid.innerHTML = ""; grid.scrollTop = 0; }
+      gifOffset += data.length;
+      const total = json.pagination && json.pagination.total_count;
+      gifMore = data.length === GIF_PAGE && gifOffset < GIF_MAX && (!total || gifOffset < total);
+      const seen = new Set([...grid.querySelectorAll("button")].map(b => b.dataset.id));
       for (const g of data) {
+        if (seen.has(g.id)) continue;
         const im = g.images && (g.images.fixed_width_small || g.images.fixed_width);
         if (!im || !GIF_RE.test("gif:" + g.id)) continue;
         const b = document.createElement("button"), img = document.createElement("img");
-        b.type = "button"; b.setAttribute("aria-label", "Send GIF: " + (g.title || "GIF"));
+        b.type = "button"; b.dataset.id = g.id; b.setAttribute("aria-label", "Send GIF: " + (g.title || "GIF"));
         img.src = im.url; img.alt = ""; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
         if (im.width && im.height) { img.width = +im.width; img.height = +im.height; }
         b.appendChild(img);
@@ -3496,8 +3507,14 @@ button, .cell { touch-action: manipulation; }
       $("gifNote").textContent = grid.children.length ? "" : "No GIFs found. Try another word.";
     } catch (e) {
       if (id === gifReq) $("gifNote").textContent = "Couldn't load GIFs right now. Try again in a bit.";
+    } finally {
+      if (id === gifReq) gifBusy = false;
     }
   }
+  $("gifGrid").addEventListener("scroll", () => {
+    const g = $("gifGrid");
+    if (g.scrollHeight - g.scrollTop - g.clientHeight < 120) loadGifs(gifQ, true);
+  }, { passive: true });
   $("gifBtn").addEventListener("click", () => {
     if (!togglePop("gifPop", "gifBtn")) return;
     $("gifSearch").value = "";
