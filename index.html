@@ -421,6 +421,12 @@ button, .cell { touch-action: manipulation; }
 .gif-grid img { display: block; width: 100%; height: auto; }
 .gif-grid button:focus-visible { outline: 3px solid var(--blue); }
 .gif-foot { font-size: 11px; color: var(--muted); text-align: right; }
+/* Beside the board the chat has a fixed height, so an open picker shrinks to fit. */
+.play-chat.side .chat-log { flex: 1 1 60px; min-height: 60px; }
+.play-chat.side .chat-pop { flex: 0 1 280px; min-height: 0; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.play-chat.side .chat-pop[hidden] { display: none; }
+.play-chat.side .emoji-grid, .play-chat.side .gif-grid { flex: 1; min-height: 0; max-height: none; }
+.play-chat.side .chat-log { margin-bottom: 8px; }
 .msg img.gif { display: block; height: 120px; width: auto; max-width: 100%; border-radius: 8px; margin-top: 4px; background: var(--surface); }
 .clocks { display: flex; justify-content: center; gap: 12px; margin: -4px 0 14px; }
 .clock { font: 700 22px var(--font-display); font-variant-numeric: tabular-nums; padding: 6px 16px; border-radius: 10px; background: var(--surface); border: 2px solid var(--line); min-width: 7.5em; text-align: center; }
@@ -3374,7 +3380,7 @@ button, .cell { touch-action: manipulation; }
 
   // ---------- Emoji and GIF pickers ----------
   // GIF search uses GIPHY. Put a GIPHY API key here (developers.giphy.com) to turn on the GIF button.
-  const GIPHY_KEY = "";
+  const GIPHY_KEY = "bMJbgvVP1Yj7JHFBRKUZ7gQevqYzZ65o";
   const EMOJIS = ("😀 😁 😂 🤣 😅 😊 😍 😘 😎 🤩 🥳 😇 🙂 😉 😜 🤪 🤔 🤨 😐 🙄 😏 😬 😴 🤯 😱 😳 🥺 😢 😭 😤 😡 🤬 💀 🤡 👻 🤖 👽 💩 " +
     "👍 👎 👏 🙌 🙏 💪 👋 🤝 ✌️ 🤞 👌 🫡 🤷 🤦 👀 🧠 ❤️ 🧡 💛 💚 💙 💜 🖤 💔 💯 🔥 ✨ ⭐ 🎉 🎊 🏆 🥇 🥈 🥉 🎯 🎮 🎲 ♟️ " +
     "❌ ⭕ 🟥 🟦 ✅ ❓ ❗ ⏰ ⌛ 🐐 🍀 🍕 🍿 🍩 ☕ 🌈 ☀️ 🌙 ⚡ 💥 💤 🚀 👑 🫠 🥶 🥵 😈 🙈 🙉 🙊").split(" ");
