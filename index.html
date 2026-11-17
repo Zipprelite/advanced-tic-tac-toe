@@ -333,6 +333,15 @@ button, .cell { touch-action: manipulation; }
 .party-menu .err { grid-column: 1 / -1; }
 .party-menu .wide-card { grid-column: 1 / -1; }
 .agames li { justify-content: space-between; }
+.notify-ask { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--cell); }
+.notify-ask .note { margin: 0; }
+.notify-ask .btn { padding: 6px 12px; font-size: 13px; }
+.turn-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px);
+  padding: 12px 14px 12px 16px; border-radius: 14px; background: var(--ink); color: var(--surface); box-shadow: 0 8px 30px rgba(0,0,0,0.25); font-size: 15px; }
+.turn-toast b { display: block; }
+.turn-toast span { font-size: 13px; opacity: 0.8; }
+.turn-toast .btn { padding: 6px 14px; font-size: 14px; }
+.turn-toast .x { appearance: none; border: 0; background: none; color: inherit; font-size: 20px; line-height: 1; cursor: pointer; opacity: 0.7; padding: 4px; }
 .agames .ainfo { min-width: 0; font-size: 15px; line-height: 1.4; }
 .agames .ast { color: var(--muted); font-size: 13px; font-weight: 600; }
 .agames li.k1 .ast { color: var(--turn); }
@@ -597,6 +606,10 @@ button, .cell { touch-action: manipulation; }
     <div class="party-menu" id="asyncMenu" hidden>
       <div class="setup-card wide-card">
         <span class="label">Your unsynced games</span>
+        <div class="notify-ask" id="notifyAsk" hidden>
+          <p class="note">Get a notification when it's your turn, while this website is open.</p>
+          <button type="button" class="btn primary" id="notifyAskBtn">Turn on</button>
+        </div>
         <ul class="members agames" id="asyncList"></ul>
         <p class="note" id="asyncEmpty"></p>
       </div>
@@ -678,8 +691,22 @@ button, .cell { touch-action: manipulation; }
         </div>
         <p class="note" id="invisNote"></p>
       </div>
+      <div class="group">
+        <span class="label">Turn notifications</span>
+        <div class="seg" role="group" aria-label="Turn notifications">
+          <button type="button" data-notify="0">Off</button>
+          <button type="button" data-notify="1">On</button>
+        </div>
+        <p class="note" id="notifyNote"></p>
+      </div>
     </div>
   </section>
+
+  <div class="turn-toast" id="turnToast" role="status" hidden>
+    <div><b id="turnToastTitle">Your turn</b><span id="turnToastText"></span></div>
+    <button type="button" class="btn primary" id="turnToastPlay">Play</button>
+    <button type="button" class="x" id="turnToastX" aria-label="Close">×</button>
+  </div>
 
   <section class="setup" id="rulesScreen" hidden>
     <button type="button" class="btn back" id="rulesBack">← Menu</button>
@@ -3344,6 +3371,7 @@ button, .cell { touch-action: manipulation; }
     l.unsub = fb.db.collection("games").where("players", "array-contains", user.uid).onSnapshot(snap => {
       if (alist !== l) return;
       l.games = snap.docs.map(d => Object.assign({ code: d.id }, d.data({ serverTimestamps: "estimate" })));
+      checkTurns(l);
       l.loaded = true;
       renderAsyncList();
     }, e => { if (alist === l) { l.loaded = true; asyncErr(fbErrorText(e)); renderAsyncList(); } });
@@ -3421,9 +3449,85 @@ button, .cell { touch-action: manipulation; }
       li.append(info, btns);
       ul.appendChild(li);
     }
+    renderNotifyAsk();
     const mine = rows.filter(x => x.st.k === 1).length;
     $("where-async").textContent = "Unsynced" + (mine ? " (" + mine + ")" : "");
   }
+
+  // ===== Turn notifications =====
+  // When an unsynced game becomes your turn and you aren't looking at it, tell you:
+  // a system notification if the page is in the background, or a pop-up in the page if it isn't.
+  const canNotify = "Notification" in window;
+  const notifyOn = () => canNotify && Notification.permission === "granted" && stored("att-notify") !== "0";
+  let swReg = null;
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").then(r => { swReg = r; }).catch(() => {});
+    navigator.serviceWorker.addEventListener("message", e => { if (e.data && e.data.att === "open-async" && e.data.code) goToAsync(e.data.code); });
+  }
+  function goToAsync(code) {
+    $("turnToast").hidden = true;
+    window.focus();
+    if (agame && agame.code === code) return;
+    openAsync(code);
+  }
+  function checkTurns(l) {
+    const seen = l.turns || new Map(), first = !l.turns;
+    l.turns = new Map();
+    for (const g of l.games) {
+      const st = both(g) && !g.done && !g.resigned && !(g.hidden || []).includes(l.uid) ? asyncStatus(g, l.uid) : null;
+      const mine = !!st && st.k === 1, n = (g.moves || []).length;
+      l.turns.set(g.code, { mine, n });
+      const was = seen.get(g.code);
+      if (first || !mine || (was && was.mine && was.n === n)) continue;
+      const looking = agame && agame.code === g.code && !document.hidden;
+      if (!looking) tellTurn(g, l.uid);
+    }
+  }
+  function tellTurn(g, uid) {
+    const opp = g.red === uid ? g.blueName : g.redName, title = "Your turn in " + (GAMES[g.game] ? GAMES[g.game].title : "your game");
+    const body = (g.moves || []).length ? opp + " has moved." : opp + " accepted your invite.";
+    if (document.hidden) {
+      if (!/^\(/.test(document.title)) document.title = "(Your turn) " + document.title;
+      if (!notifyOn()) return;
+      const opts = { body, tag: "att-" + g.code, data: { code: g.code } };
+      if (swReg && swReg.showNotification) swReg.showNotification(title, opts).catch(() => {});
+      else try { const n = new Notification(title, opts); n.onclick = () => { n.close(); goToAsync(g.code); }; } catch (e) {}
+      return;
+    }
+    $("turnToastTitle").textContent = title;
+    $("turnToastText").textContent = body;
+    $("turnToast").dataset.code = g.code;
+    $("turnToast").hidden = false;
+    clearTimeout(tellTurn.t);
+    tellTurn.t = setTimeout(() => { $("turnToast").hidden = true; }, 15000);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = document.title.replace(/^\(Your turn\) /, ""); });
+  $("turnToastPlay").addEventListener("click", () => goToAsync($("turnToast").dataset.code));
+  $("turnToastX").addEventListener("click", () => { $("turnToast").hidden = true; });
+  async function turnOnNotify() {
+    store("att-notify", "1");
+    if (canNotify && Notification.permission === "default") { try { await Notification.requestPermission(); } catch (e) {} }
+    renderSettings(); renderNotifyAsk();
+  }
+  function renderNotifyAsk() {
+    $("notifyAsk").hidden = !canNotify || guest || !alist || Notification.permission !== "default" || stored("att-notify") === "0";
+  }
+  function renderNotify() {
+    const on = notifyOn();
+    for (const b of document.querySelectorAll("[data-notify]")) {
+      b.disabled = !canNotify;
+      b.setAttribute("aria-pressed", String(+on) === b.dataset.notify);
+    }
+    $("notifyNote").textContent = !canNotify ? "This browser can't show notifications. On an iPhone, add this website to your Home Screen first."
+      : Notification.permission === "denied" && stored("att-notify") === "1" ? "Your browser is blocking notifications from this website. Allow them in the browser's site settings (the icon next to the web address), then turn this on again."
+      : on ? "On. When it's your turn in an unsynced game, you'll get a notification, as long as this website is open in a tab."
+      : "Off. Turn this on to get a notification when it's your turn in an unsynced game.";
+  }
+  for (const b of document.querySelectorAll("[data-notify]")) b.addEventListener("click", () => {
+    if (b.dataset.notify === "1") turnOnNotify();
+    else { store("att-notify", "0"); renderSettings(); renderNotifyAsk(); }
+  });
+  $("notifyAskBtn").addEventListener("click", turnOnNotify);
 
   // Make an unsynced game for an invite. Only the invited player can join it.
   async function createUnsynced(user, key, opts, invitee, inviteeName, side, first) {
@@ -3636,6 +3740,7 @@ button, .cell { touch-action: manipulation; }
 
   // ===== Settings =====
   function renderSettings() {
+    renderNotify();
     const ok = !!pres && pres.loaded;
     for (const b of document.querySelectorAll("[data-invis]")) {
       b.disabled = !ok;
