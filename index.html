@@ -1889,6 +1889,10 @@ button, .cell { touch-action: manipulation; }
         st.position.set(n[0] * 0.49, n[1] * 0.49, n[2] * 0.49);
         st.quaternion.setFromUnitVectors(zAxis, new T.Vector3(n[0], n[1], n[2]));
         st.userData.i = i;
+        // The X or O: a white shape on a see-through layer just above the square.
+        const mark = new T.Mesh(stickerGeo, new T.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+        mark.position.z = 0.003; mark.visible = false;
+        st.add(mark); st.userData.mark = mark;
         cubie.add(st); stickers.push(st); hits.push(st);
       }
       const rods = new T.Group();
@@ -1972,21 +1976,20 @@ button, .cell { touch-action: manipulation; }
       this.refresh();
     },
 
-    // A sticker picture: the player's colour with a white X or O.
-    texture(p, color) {
-      const t = this.three, key = p + color;
-      if (t.tex[key]) return t.tex[key];
+    // A white X or O on a see-through background. The square underneath gives the colour,
+    // so it's the same red and blue as everywhere else (some browsers mix up colours in pictures).
+    texture(p) {
+      const t = this.three;
+      if (t.tex[p]) return t.tex[p];
       const cv = document.createElement("canvas");
       cv.width = cv.height = 128;
       const g = cv.getContext("2d");
-      g.fillStyle = color; g.fillRect(0, 0, 128, 128);
       g.strokeStyle = "#fff"; g.lineWidth = 15; g.lineCap = "round";
       g.beginPath();
       if (p === 1) { g.moveTo(34, 34); g.lineTo(94, 94); g.moveTo(94, 34); g.lineTo(34, 94); }
       else g.arc(64, 64, 33, 0, Math.PI * 2);
       g.stroke();
-      const tex = new t.T.CanvasTexture(cv);
-      return (t.tex[key] = tex);
+      return (t.tex[p] = new t.T.CanvasTexture(cv));
     },
 
     update3d() {
@@ -1996,16 +1999,26 @@ button, .cell { touch-action: manipulation; }
       const hex = name => css.getPropertyValue(name).trim() || "#888";
       const col = name => new t.T.Color(hex(name));
       const bg = col("--bg"), dark = bg.r + bg.g + bg.b < 1.2;
-      const red = hex("--red"), blue = hex("--blue"), turn = col(s.turn === 1 ? "--red" : "--blue");
+      const red = col("--red"), blue = col("--blue"), turn = s.turn === 1 ? red : blue;
+      const white = new t.T.Color(1, 1, 1);
       const empty = col(dark ? "--cell-hover" : "--cell");
       const inLine = new Set(s.wins.flat());
       for (let i = 0; i < 54; i++) {
         const mat = t.stickers[i].material, v = s.cells[i];
-        if (v) { mat.map = this.texture(v, v === 1 ? red : blue); mat.color.setRGB(1, 1, 1); }
-        else { mat.map = null; mat.color.copy(empty); if (i === this.hover) mat.color.lerp(turn, 0.45); }
-        mat.emissive.setRGB(0, 0, 0);
-        if (inLine.has(i)) mat.emissive.setRGB(0.3, 0.3, 0.3);
-        else if (i === s.last && !s.winner) mat.emissive.setRGB(0.18, 0.18, 0.18);
+        const mark = t.stickers[i].userData.mark;
+        mat.map = null;
+        mark.visible = !!v;
+        if (v) {
+          // Marked squares glow in exactly the game's red or blue, whatever the lighting.
+          mat.color.setRGB(0, 0, 0);
+          mat.emissive.copy(v === 1 ? red : blue);
+          if (inLine.has(i)) mat.emissive.lerp(white, 0.25);
+          else if (i === s.last && !s.winner) mat.emissive.lerp(white, 0.12);
+          mark.material.map = this.texture(v); mark.material.needsUpdate = true;
+        } else {
+          mat.color.copy(empty); mat.emissive.setRGB(0, 0, 0);
+          if (i === this.hover) mat.color.lerp(turn, 0.45);
+        }
         mat.needsUpdate = true;
       }
       // A white bar across each winning line.
