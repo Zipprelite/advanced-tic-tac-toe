@@ -2130,7 +2130,17 @@ button, .cell { touch-action: manipulation; }
   }
   let resizeTimer;
   // Put the game chat beside the board when there's room on the right; otherwise under it.
+  // Shrink the board so it fits in the window under the buttons, so Undo and the whole board are on screen together.
+  function fitBoard() {
+    const wrap = $("boardWrap");
+    if ($("play").hidden) return;
+    const top = wrap.getBoundingClientRect().top + window.scrollY;
+    const fit = Math.floor(window.innerHeight - top - 16);
+    const px = Math.max(260, fit) + "px";
+    if (wrap.style.maxWidth !== px) { wrap.style.maxWidth = px; wrap.style.marginInline = "auto"; }
+  }
   function placeChat() {
+    fitBoard();
     const slot = $("playChatSlot"), play = $("play"), wrap = $("board");
     if (slot.hidden || play.hidden) return;
     const pr = play.getBoundingClientRect(), br = wrap.getBoundingClientRect();
