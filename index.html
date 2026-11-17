@@ -240,12 +240,19 @@ h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
 .cube-stage { position: absolute; inset: 0; }
 button, .cell { touch-action: manipulation; }
 .cube-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; border-radius: 20px; }
-.cube-floor { position: absolute; inset: 0; padding: clamp(8px, 2vw, 14px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: clamp(6px, 1.8vw, 12px); }
-.cube-floor .cell { border-radius: 14px; }
-.cube-floor .cell:not(:disabled):hover { background: var(--turn-soft); }
-.cube-floor .cell.blocked { background: var(--draw-soft); }
-.cube-floor .cell.win.p1 { background: var(--red-soft); }
-.cube-floor .cell.win.p2 { background: var(--blue-soft); }
+.rb-net { position: absolute; inset: 0; padding: clamp(8px, 2vw, 14px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(4px, 1vw, 8px); align-content: center; }
+.rb-face { aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; background: #1d2029; border-radius: 8px; }
+.rb-face .cell { border-radius: 4px; }
+.rb-face .cell svg { left: 12%; top: 12%; width: 76%; height: 76%; }
+.rb-face .cell:not(:disabled):hover { background: var(--turn-soft); }
+.rb-face .cell.win.p1 { background: var(--red-soft); }
+.rb-face .cell.win.p2 { background: var(--blue-soft); }
+.rb-face .cell.rb-sel { box-shadow: inset 0 0 0 2px var(--turn); background: var(--turn-soft); }
+.rb-twist { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); white-space: nowrap; font-size: 14px; font-weight: 600; }
+.rb-twist .btn[data-tw] { font-size: 22px; line-height: 1; padding: 6px 14px; min-width: 0; }
+.rb-twist .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.floorbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.floorbar .seg { flex: 1 1 auto; }
 .cube-msg { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; text-align: center; color: var(--muted); font-size: 13px; font-weight: 600; pointer-events: none; }
 .floorbar { max-width: 560px; margin: -4px auto 10px; }
 .labs { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 22px; font-size: 14px; }
@@ -1576,26 +1583,44 @@ button, .cell { touch-action: manipulation; }
     }
   };
 
-  // ================= 3D Cube (experimental) =================
-  // A 3x3x3 cube of 27 small cubes. Cell index = floor * 9 + row * 3 + column
-  // (floor 0 is the bottom). The center cube (13) is blocked. Play until every
-  // cube is claimed; whoever made more lines of three, in any direction, wins.
-  const CUBE_CENTER = 13;
-  const CUBE_LINES = (() => {
-    const L = [], at = (x, y, z) => z * 9 + y * 3 + x, ok = v => v >= 0 && v <= 2;
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-      const first = dx || dy || dz;
-      if (first <= 0) continue;   // one direction from each opposite pair
-      for (let z = 0; z < 3; z++) for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
-        if (ok(x - dx) && ok(y - dy) && ok(z - dz)) continue;   // not the start of a line
-        if (!(ok(x + 2 * dx) && ok(y + 2 * dy) && ok(z + 2 * dz))) continue;
-        L.push([at(x, y, z), at(x + dx, y + dy, z + dz), at(x + 2 * dx, y + 2 * dy, z + 2 * dz)]);
+  // ================= 3D Cube (experimental): a twistable cube =================
+  // The outside of a 3x3x3 puzzle cube: 6 sides of 3x3, 54 squares.
+  // Square index = side * 9 + row * 3 + column, as seen looking straight at that side.
+  // Sides: 0 right, 1 left, 2 top, 3 bottom, 4 front, 5 back.
+  // Moves 0-53 place a mark. Moves 54-65 twist a side a quarter turn:
+  // 54 + side * 2 + (0 = clockwise, 1 = anticlockwise), as seen looking at that side.
+  const RB_N = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];   // which way each side faces
+  const RB_R = [[0,0,-1],[0,0,1],[1,0,0],[1,0,0],[1,0,0],[-1,0,0]];   // "right" on each side
+  const RB_D = [[0,-1,0],[0,-1,0],[0,0,1],[0,0,-1],[0,-1,0],[0,-1,0]]; // "down" on each side
+  const RB_TWIST = 54, RB_MAX = 200;
+  const rbPos = i => {
+    const f = (i / 9) | 0, r = ((i % 9) / 3) | 0, c = i % 3;
+    return [0, 1, 2].map(k => RB_N[f][k] + (c - 1) * RB_R[f][k] + (r - 1) * RB_D[f][k]);
+  };
+  const rbDot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  // RB_PERM[t][i] = where the mark on square i ends up after twist t.
+  const RB_PERM = (() => {
+    const key = (p, n) => p.join() + "|" + n.join();
+    const at = new Map();
+    for (let i = 0; i < 54; i++) at.set(key(rbPos(i), RB_N[(i / 9) | 0]), i);
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const rot = (v, n, sn) => { const x = cross(n, v), d = rbDot(n, v); return [0, 1, 2].map(k => x[k] * sn + n[k] * d); };
+    const P = [];
+    for (let f = 0; f < 6; f++) for (let d = 0; d < 2; d++) {
+      const n = RB_N[f], sn = d === 0 ? -1 : 1;   // clockwise seen from outside = a negative turn about the outward axis
+      const to = new Int8Array(54);
+      for (let i = 0; i < 54; i++) {
+        const p = rbPos(i);
+        to[i] = rbDot(p, n) === 1 ? at.get(key(rot(p, n, sn), rot(RB_N[(i / 9) | 0], n, sn))) : i;
       }
+      P.push(to);
     }
-    return L;
+    return P;
   })();
-  const CUBE_LINES_AT = Array.from({ length: 27 }, (_, m) => CUBE_LINES.map((l, i) => l.includes(m) ? i : -1).filter(i => i >= 0));
-  const FLOOR_NAME = ["bottom", "middle", "top"];
+  const RB_LINES = [];
+  for (let f = 0; f < 6; f++) for (const l of LINES) RB_LINES.push(l.map(c => f * 9 + c));
+  // Where each side sits in the flat view, as [side, column, row]: the cube unfolded into a cross.
+  const RB_NET = [[2, 1, 0], [1, 0, 1], [4, 1, 1], [0, 2, 1], [5, 3, 1], [3, 1, 2]];
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
 
   let threeLoading = null;
@@ -1613,116 +1638,207 @@ button, .cell { touch-action: manipulation; }
   const Cube = {
     title: "3D Cube",
     rules: [
-      "<b>The board is a cube</b> of 27 small cubes, three floors of 3×3. The center cube is blocked.",
-      "<b>Take turns claiming cubes.</b> Red goes first. Drag to spin the cube, or use the floor buttons to see one floor flat.",
-      "<b>Make lines of three</b> in any direction: across a floor, straight up and down, diagonally through the floors, or corner to corner.",
-      "<b>Keep going until every cube is claimed.</b> Whoever made more lines wins. Same number of lines is a draw."
+      "<b>The board is a puzzle cube</b> like a Rubik's cube. Each of its 6 sides is a 3×3 board. Drag to spin the cube and look all around it.",
+      "<b>On your turn, do one thing:</b> place your mark on any empty square, or <b>twist</b> one side of the cube a quarter turn. A twist moves every mark on that side, and the edge squares of the 4 sides around it, just like a real puzzle cube.",
+      "<b>Get 3 in a row on one side to win:</b> across, down, or corner to corner. A line can't bend around an edge.",
+      "<b>If a twist makes 3 in a row for both players,</b> whoever twisted wins. If it only makes one for the other player, they win.",
+      "<b>No twisting straight back.</b> You can't undo the other player's twist by turning the same side back on your very next turn.",
+      "<b>After " + RB_MAX + " moves with no winner,</b> it's a draw."
     ],
     newState() {
-      const cells = new Uint8Array(27);
-      cells[CUBE_CENTER] = 3;
-      return { cells, turn: 1, winner: 0, last: -1, line: null, lines: [], score: [0, 0, 0] };
+      return { cells: new Uint8Array(54), turn: 1, winner: 0, last: -1, twist: -1, n: 0, wins: [] };
     },
-    clone: s => ({ cells: s.cells.slice(), turn: s.turn, winner: s.winner, last: s.last, line: null, lines: s.lines.slice(), score: s.score.slice() }),
+    clone: s => ({ cells: s.cells.slice(), turn: s.turn, winner: s.winner, last: s.last, twist: s.twist, n: s.n, wins: s.wins }),
     legal(s) {
       const out = [];
       if (s.winner) return out;
-      for (let i = 0; i < 27; i++) if (!s.cells[i]) out.push(i);
+      for (let i = 0; i < 54; i++) if (!s.cells[i]) out.push(i);
+      const back = s.twist >= 0 ? s.twist ^ 1 : -1;   // the twist that would undo the last one
+      for (let t = 0; t < 12; t++) if (t !== back) out.push(RB_TWIST + t);
       return out;
     },
     apply(s, m) {
       const p = s.turn;
-      s.cells[m] = p;
-      for (const li of CUBE_LINES_AT[m]) {
-        const l = CUBE_LINES[li];
-        if (s.cells[l[0]] === p && s.cells[l[1]] === p && s.cells[l[2]] === p) { s.lines.push([li, p]); s.score[p]++; }
+      if (m < RB_TWIST) { s.cells[m] = p; s.last = m; s.twist = -1; }
+      else {
+        const to = RB_PERM[m - RB_TWIST], c = new Uint8Array(54);
+        for (let i = 0; i < 54; i++) c[to[i]] = s.cells[i];
+        s.cells = c; s.twist = m - RB_TWIST;
+        s.last = s.last >= 0 ? to[s.last] : -1;
       }
-      let empty = false;
-      for (let i = 0; i < 27; i++) if (!s.cells[i]) { empty = true; break; }
-      if (!empty) s.winner = s.score[1] > s.score[2] ? 1 : s.score[2] > s.score[1] ? 2 : 3;
+      s.n++;
+      const mine = [], theirs = [];
+      for (const l of RB_LINES) {
+        const v = s.cells[l[0]];
+        if (v && v === s.cells[l[1]] && v === s.cells[l[2]]) (v === p ? mine : theirs).push(l);
+      }
+      if (mine.length) { s.winner = p; s.wins = mine; }
+      else if (theirs.length) { s.winner = 3 - p; s.wins = theirs; }
+      else if (s.n >= RB_MAX) s.winner = 3;
       s.turn = 3 - p;
-      s.last = m;
+    },
+    // How good a position looks for player p: open twos and ones on each side.
+    value(s, p) {
+      let v = 0;
+      for (const l of RB_LINES) {
+        let a = 0, b = 0;
+        for (const c of l) { if (s.cells[c] === p) a++; else if (s.cells[c]) b++; }
+        if (!b && a) v += a === 2 ? 4 : 1;
+        if (!a && b) v -= b === 2 ? 5 : 1;
+      }
+      return v;
     },
     ai(s, diff) {
-      if (diff === "easy") {
-        const moves = Cube.legal(s);
-        if (Math.random() < 0.5) {
-          const good = moves.filter(m => CUBE_LINES_AT[m].some(li => CUBE_LINES[li].every(c => c === m || s.cells[c] === s.turn)));
-          if (good.length) return rnd(good);
-        }
-        return rnd(moves);
+      const p = s.turn, moves = Cube.legal(s);
+      const after = m => { const t = Cube.clone(s); Cube.apply(t, m); return t; };
+      const wins = moves.filter(m => after(m).winner === p);
+      if (wins.length) return rnd(wins);
+      const places = moves.filter(m => m < RB_TWIST);
+      if (diff === "easy") return rnd(places.length && Math.random() < 0.85 ? places : moves);
+      // Never give the other player a win on their next move, if that can be helped.
+      const safe = [];
+      for (const m of moves) {
+        const t = after(m);
+        if (t.winner) { if (t.winner !== 3 - p) safe.push([m, t]); continue; }
+        if (!Cube.legal(t).some(r => { const u = Cube.clone(t); Cube.apply(u, r); return u.winner === 3 - p; })) safe.push([m, t]);
       }
-      return mcts(Cube, s, diff === "medium" ? 300 : 1500);
+      if (!safe.length) return rnd(places.length ? places : moves);
+      if (diff === "hard") {
+        const m = mcts(Cube, s, 1200);
+        if (safe.some(x => x[0] === m)) return m;
+      } else if (Math.random() < 0.15) return rnd(safe)[0];
+      let best = [], bv = -Infinity;
+      for (const [m, t] of safe) {
+        const v = Cube.value(t, p) + Math.random() * 0.5;
+        if (v > bv) { bv = v; best = [m]; } else if (v === bv) best.push(m);
+      }
+      return rnd(best);
     },
     hint(s, n) {
-      if (!n) return NAME[s.turn] + " goes first. Claim any cube. Most lines wins.";
-      return "Lines so far: Red " + s.score[1] + ", Blue " + s.score[2] + ".";
+      if (!n) return NAME[s.turn] + " goes first. Place a mark or twist a side. 3 in a row on one side wins.";
+      return s.twist >= 0 ? NAME[3 - s.turn] + " twisted a side. Place a mark or twist a side." : "Place a mark or twist a side.";
     },
-    scoreText: s => "Final count: Red " + plural(s.score[1], "line") + ", Blue " + plural(s.score[2], "line") + ".",
-    drawText: "Both players made the same number of lines.",
-    delay: 300,
+    drawText: "Nobody got 3 in a row in " + RB_MAX + " moves.",
+    delay: 350,
 
     build(root) {
       root.className = "cube3d";
-      this.view = -1;          // -1 = 3D view, 0-2 = a single floor
-      this.s = null; this.moves = new Set(); this.locked = true; this.hover = -1;
+      this.view = 0;           // 0 = 3D, 1 = flat
+      this.mode = "place";     // "place" or "twist"
+      this.sel = -1;           // the side picked for twisting
+      this.s = null; this.moves = new Set(); this.locked = true; this.hover = -1; this.hoverSide = -1;
       this.three = null;
       root.innerHTML =
         '<div class="cube-stage"></div>' +
-        '<div class="cube-floor" hidden></div>' +
-        '<p class="cube-msg">Drag to spin. Tap a cube to claim it.</p>';
+        '<div class="rb-net" hidden></div>' +
+        '<div class="rb-twist" hidden>' +
+          '<button type="button" class="btn" data-tw="1" aria-label="Twist anticlockwise">↺</button>' +
+          '<span>Twist this side</span>' +
+          '<button type="button" class="btn" data-tw="0" aria-label="Twist clockwise">↻</button>' +
+          '<button type="button" class="linkbtn" data-tw="x">Cancel</button></div>' +
+        '<p class="cube-msg"></p>';
       this.stage = root.querySelector(".cube-stage");
-      this.floorEl = root.querySelector(".cube-floor");
+      this.net = root.querySelector(".rb-net");
+      this.twistEl = root.querySelector(".rb-twist");
       this.msg = root.querySelector(".cube-msg");
-      this.floorCells = [];
-      for (let c = 0; c < 9; c++) {
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "cell";
-        this.floorEl.appendChild(b); this.floorCells.push(b);
+      this.netCells = [];
+      for (const [f, col, row] of RB_NET) {
+        const face = document.createElement("div");
+        face.className = "rb-face";
+        face.style.gridColumn = col + 1; face.style.gridRow = row + 1;
+        for (let c = 0; c < 9; c++) {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "cell";
+          const i = f * 9 + c;
+          b.addEventListener("click", () => this.tap(i));
+          face.appendChild(b); this.netCells[i] = b;
+        }
+        this.net.appendChild(face);
       }
+      for (const b of this.twistEl.querySelectorAll("[data-tw]")) b.addEventListener("click", () => {
+        if (b.dataset.tw === "x") return this.setMode("twist", -1);
+        this.doTwist(+b.dataset.tw);
+      });
       const bar = $("floorBar");
       bar.innerHTML =
+        '<div class="seg" role="group" aria-label="Move">' +
+        '<button type="button" data-rbmode="place">Place a mark</button>' +
+        '<button type="button" data-rbmode="twist">Twist a side</button></div>' +
         '<div class="seg" role="group" aria-label="View">' +
-        '<button type="button" data-floor="-1">3D view</button>' +
-        '<button type="button" data-floor="2">Top</button>' +
-        '<button type="button" data-floor="1">Middle</button>' +
-        '<button type="button" data-floor="0">Bottom</button></div>';
+        '<button type="button" data-rbview="0">3D</button>' +
+        '<button type="button" data-rbview="1">Flat</button></div>';
       bar.hidden = false;
-      for (const b of bar.querySelectorAll("[data-floor]")) b.addEventListener("click", () => { this.setView(+b.dataset.floor); });
-      this.setView(-1);
+      for (const b of bar.querySelectorAll("[data-rbmode]")) b.addEventListener("click", () => this.setMode(b.dataset.rbmode, -1));
+      for (const b of bar.querySelectorAll("[data-rbview]")) b.addEventListener("click", () => this.setView(+b.dataset.rbview));
+      this.setView(0);
       loadThree().then(() => { if (root.isConnected && G === Cube) this.init3d(); })
-        .catch(() => { this.msg.textContent = "The 3D view couldn't load. Use the floor buttons to play."; this.setView(2); });
+        .catch(() => { this.setView(1); });
     },
 
     setView(v) {
       this.view = v;
-      this.stage.hidden = v >= 0;
-      this.floorEl.hidden = v < 0;
-      this.msg.hidden = v >= 0;
-      for (const b of $("floorBar").querySelectorAll("[data-floor]")) b.setAttribute("aria-pressed", +b.dataset.floor === v);
-      if (this.s) this.renderFloor();
-      if (v < 0 && this.three) { this.three.resize(); this.update3d(); }
+      this.stage.hidden = v === 1;
+      this.net.hidden = v === 0;
+      for (const b of $("floorBar").querySelectorAll("[data-rbview]")) b.setAttribute("aria-pressed", +b.dataset.rbview === v);
+      this.refresh();
+      if (v === 0 && this.three) this.three.resize();
+    },
+
+    setMode(mode, sel) {
+      this.mode = mode; this.sel = mode === "twist" ? sel : -1;
+      this.refresh();
+    },
+
+    tap(i) {
+      if (this.locked || !this.s || this.s.winner) return;
+      if (this.mode === "place") { if (this.moves.has(i)) play(i); }
+      else this.setMode("twist", (i / 9) | 0);
+    },
+
+    doTwist(d) {
+      const t = RB_TWIST + this.sel * 2 + d;
+      if (this.sel < 0 || this.locked || !this.moves.has(t)) return;
+      this.mode = "place"; this.sel = -1;
+      play(t);
     },
 
     render(root, s, moves, locked, popMove) {
       this.s = s; this.moves = moves; this.locked = locked;
-      this.renderFloor(popMove);
+      if (locked || s.winner) { this.sel = -1; if (s.winner) this.mode = "place"; }
+      this.refresh();
+      if (this.three && popMove >= RB_TWIST) this.animate(popMove - RB_TWIST);
+    },
+
+    refresh() {
+      const s = this.s;
+      for (const b of $("floorBar").querySelectorAll("[data-rbmode]")) {
+        b.setAttribute("aria-pressed", b.dataset.rbmode === this.mode);
+        b.disabled = !!(s && s.winner);
+      }
+      const picking = this.mode === "twist" && this.sel >= 0;
+      this.twistEl.hidden = !picking;
+      if (picking) for (const b of this.twistEl.querySelectorAll("[data-tw]")) {
+        if (b.dataset.tw === "x") continue;
+        const ok = this.moves.has(RB_TWIST + this.sel * 2 + +b.dataset.tw);
+        b.disabled = this.locked || !ok;
+        b.title = ok ? "" : "You can't twist straight back on your next turn.";
+      }
+      this.msg.hidden = picking || this.view === 1 || !s || !!s.winner;
+      this.msg.textContent = !this.three ? "Loading the cube…"
+        : this.mode === "twist" ? "Drag to spin. Tap a side to twist it." : "Drag to spin. Tap a square to place your mark.";
+      if (s) this.renderNet();
       if (this.three) this.update3d();
     },
 
-    renderFloor(popMove) {
-      const s = this.s;
-      if (this.view < 0 || !s) return;
-      const inLine = new Set();
-      for (const [li] of s.lines) for (const c of CUBE_LINES[li]) inLine.add(c);
-      for (let c = 0; c < 9; c++) {
-        const m = this.view * 9 + c, el = this.floorCells[c], v = s.cells[m];
-        el.dataset.m = m;
-        drawCell(el, v === 3 ? 0 : v, m === popMove);
-        el.className = "cell" + (v === 1 || v === 2 ? " p" + v : "") + (v === 3 ? " blocked" : "") +
-          (m === s.last ? " last" : "") + (inLine.has(m) ? " win" : "");
-        el.disabled = !this.moves.has(m) || this.locked;
-        el.setAttribute("aria-label", FLOOR_NAME[this.view] + " floor, " + POS[c] + (v === 3 ? ", blocked" : v ? ", " + NAME[v] : ""));
+    renderNet() {
+      const s = this.s, inLine = new Set(s.wins.flat()), twisting = this.mode === "twist";
+      for (let i = 0; i < 54; i++) {
+        const el = this.netCells[i], v = s.cells[i], f = (i / 9) | 0;
+        drawCell(el, v, false);
+        el.className = "cell" + (v ? " p" + v : "") + (i === s.last && !s.winner ? " last" : "") +
+          (inLine.has(i) ? " win" : "") + (twisting && f === this.sel ? " rb-sel" : "") + (twisting ? " rb-twisting" : "");
+        el.disabled = this.locked || !!s.winner || (!twisting && !this.moves.has(i));
+        el.setAttribute("aria-label", ["Right", "Left", "Top", "Bottom", "Front", "Back"][f] + " side, " + POS[i % 9] + (v ? ", " + NAME[v] : ""));
       }
     },
 
@@ -1732,30 +1848,41 @@ button, .cell { touch-action: manipulation; }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       stage.appendChild(renderer.domElement);
       const scene = new T.Scene();
-      const camera = new T.PerspectiveCamera(38, 1, 0.1, 100);
-      camera.position.set(0, 0, 10);
-      scene.add(new T.AmbientLight(0xffffff, 0.75));
-      const sun = new T.DirectionalLight(0xffffff, 0.65);
+      const camera = new T.PerspectiveCamera(36, 1, 0.1, 100);
+      camera.position.set(0, 0, 10.5);
+      scene.add(new T.AmbientLight(0xffffff, 1));
+      const sun = new T.DirectionalLight(0xffffff, 0.35);
       sun.position.set(3, 6, 7); scene.add(sun);
       const group = new T.Group();
       group.rotation.set(0.5, -0.65, 0);
       scene.add(group);
-      const box = new T.BoxGeometry(0.8, 0.8, 0.8), edges = new T.EdgesGeometry(box);
-      const meshes = [];
-      for (let i = 0; i < 27; i++) {
-        const x = i % 3, y = ((i / 3) | 0) % 3, z = (i / 9) | 0;
-        const mesh = new T.Mesh(box, new T.MeshStandardMaterial({ transparent: true, roughness: 0.55, metalness: 0.05 }));
-        mesh.position.set((x - 1) * 1.25, (z - 1) * 1.25, (y - 1) * 1.25);
-        mesh.userData.m = i;
-        const outline = new T.LineSegments(edges, new T.LineBasicMaterial({ transparent: true }));
-        mesh.add(outline); mesh.userData.outline = outline;
-        group.add(mesh); meshes.push(mesh);
+      const pivot = new T.Group();
+      group.add(pivot);
+      const bodyGeo = new T.BoxGeometry(0.97, 0.97, 0.97), stickerGeo = new T.PlaneGeometry(0.84, 0.84);
+      const bodyMat = new T.MeshStandardMaterial({ color: 0x1d2029, roughness: 0.7 });
+      const cubies = [], stickers = [], hits = [];
+      for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+        if (!x && !y && !z) continue;
+        const c = new T.Mesh(bodyGeo, bodyMat);
+        c.position.set(x, y, z);
+        c.userData.p = [x, y, z];
+        group.add(c); cubies.push(c); hits.push(c);
+      }
+      const zAxis = new T.Vector3(0, 0, 1);
+      for (let i = 0; i < 54; i++) {
+        const p = rbPos(i), n = RB_N[(i / 9) | 0];
+        const cubie = cubies.find(c => c.userData.p.join() === p.join());
+        const st = new T.Mesh(stickerGeo, new T.MeshStandardMaterial({ roughness: 0.5 }));
+        st.position.set(n[0] * 0.49, n[1] * 0.49, n[2] * 0.49);
+        st.quaternion.setFromUnitVectors(zAxis, new T.Vector3(n[0], n[1], n[2]));
+        st.userData.i = i;
+        cubie.add(st); stickers.push(st); hits.push(st);
       }
       const rods = new T.Group();
       group.add(rods);
 
-      const draw = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; renderer.render(scene, camera); }); } };
       let pending = false;
+      const draw = () => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; renderer.render(scene, camera); }); } };
       const resize = () => {
         const w = stage.clientWidth;
         if (!w) return;
@@ -1765,16 +1892,15 @@ button, .cell { touch-action: manipulation; }
       };
       new ResizeObserver(resize).observe(stage);
 
-      // Drag to spin, tap to claim.
+      // Drag to spin, tap to place or to pick a side.
       const ray = new T.Raycaster(), ptr = new T.Vector2();
       const pick = e => {
+        if (this.three.busy) return -1;
         const r = renderer.domElement.getBoundingClientRect();
         ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
         ray.setFromCamera(ptr, camera);
-        // Only empty, playable cubes can be picked, so taps reach cubes behind claimed ones too.
-        const targets = meshes.filter(mm => this.moves.has(mm.userData.m) && !this.locked);
-        const hit = ray.intersectObjects(targets, false)[0];
-        return hit ? hit.object.userData.m : -1;
+        const hit = ray.intersectObjects(hits, false)[0];
+        return hit && hit.object.userData.i !== undefined ? hit.object.userData.i : -1;
       };
       let down = null;
       const cv = renderer.domElement;
@@ -1785,14 +1911,16 @@ button, .cell { touch-action: manipulation; }
           if (!down.moved && Math.hypot(dx, dy) > 6) down.moved = true;
           if (down.moved) {
             group.rotation.y += dx * 0.01;
-            group.rotation.x = Math.max(-1.4, Math.min(1.4, group.rotation.x + dy * 0.01));
+            group.rotation.x = Math.max(-1.5, Math.min(1.5, group.rotation.x + dy * 0.01));
             down.x = e.clientX; down.y = e.clientY;
             draw();
           }
         } else if (e.pointerType === "mouse") {
-          const m = pick(e);
-          if (m !== this.hover) { this.hover = m; this.update3d(); }
-          cv.style.cursor = m >= 0 ? "pointer" : "grab";
+          const i = this.locked || (this.s && this.s.winner) ? -1 : pick(e);
+          const h = this.mode === "place" ? (this.moves.has(i) ? i : -1) : -1;
+          const hs = this.mode === "twist" && i >= 0 ? (i / 9) | 0 : -1;
+          if (h !== this.hover || hs !== this.hoverSide) { this.hover = h; this.hoverSide = hs; this.update3d(); }
+          cv.style.cursor = h >= 0 || hs >= 0 ? "pointer" : "grab";
         }
       });
       const end = e => {
@@ -1800,66 +1928,102 @@ button, .cell { touch-action: manipulation; }
         const tap = !down.moved;
         down = null;
         if (tap && e.type === "pointerup") {
-          const m = pick(e);
-          if (m >= 0) { this.hover = -1; play(m); }
+          const i = pick(e);
+          if (i >= 0) { this.hover = -1; this.hoverSide = -1; this.tap(i); }
         }
       };
       cv.addEventListener("pointerup", end);
       cv.addEventListener("pointercancel", end);
-      cv.addEventListener("pointerleave", () => { if (this.hover >= 0) { this.hover = -1; this.update3d(); } });
+      cv.addEventListener("pointerleave", () => { if (this.hover >= 0 || this.hoverSide >= 0) { this.hover = -1; this.hoverSide = -1; this.update3d(); } });
 
-      this.three = { T, meshes, rods, group, draw, resize };
+      this.three = { T, cubies, stickers, rods, group, pivot, draw, resize, tex: {}, busy: false };
       resize();
-      this.update3d();
+      this.refresh();
+    },
+
+    // A sticker picture: the player's colour with a white X or O.
+    texture(p, color) {
+      const t = this.three, key = p + color;
+      if (t.tex[key]) return t.tex[key];
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 128;
+      const g = cv.getContext("2d");
+      g.fillStyle = color; g.fillRect(0, 0, 128, 128);
+      g.strokeStyle = "#fff"; g.lineWidth = 15; g.lineCap = "round";
+      g.beginPath();
+      if (p === 1) { g.moveTo(34, 34); g.lineTo(94, 94); g.moveTo(94, 34); g.lineTo(34, 94); }
+      else g.arc(64, 64, 33, 0, Math.PI * 2);
+      g.stroke();
+      const tex = new t.T.CanvasTexture(cv);
+      return (t.tex[key] = tex);
     },
 
     update3d() {
       const t = this.three, s = this.s;
       if (!t || !s) return;
       const css = getComputedStyle(document.documentElement);
-      const col = name => new t.T.Color(css.getPropertyValue(name).trim() || "#888");
-      const red = col("--red"), blue = col("--blue"), muted = col("--muted"), cellCol = col("--cell"), turn = s.turn === 1 ? red : blue;
-      const inLine = new Set();
-      for (const [li] of s.lines) for (const c of CUBE_LINES[li]) inLine.add(c);
-      for (let i = 0; i < 27; i++) {
-        const mesh = t.meshes[i], mat = mesh.material, out = mesh.userData.outline.material, v = s.cells[i];
-        mat.emissive.setRGB(0, 0, 0); mat.emissiveIntensity = 1;
-        if (v === 1 || v === 2) {
-          const c = v === 1 ? red : blue;
-          mat.color.copy(c); mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
-          out.color.copy(c); out.opacity = 0.9;
-          if (inLine.has(i)) mat.emissive.copy(c).multiplyScalar(0.25);
-          if (i === s.last) mat.emissive.copy(c).multiplyScalar(0.45);
-          mesh.scale.setScalar(1);
-        } else if (v === 3) {
-          mat.color.copy(muted); mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
-          out.color.copy(muted); out.opacity = 0.6;
-          mesh.scale.setScalar(0.5);
-        } else {
-          const hov = i === this.hover;
-          // Empty cubes are solid, in the board's cell colour.
-          mat.color.copy(hov ? turn : cellCol); mat.opacity = 1; mat.transparent = false; mat.depthWrite = true;
-          out.color.copy(hov ? turn : muted); out.opacity = hov ? 1 : 0.6;
-          mesh.scale.setScalar(hov ? 1.05 : 1);
-        }
+      const hex = name => css.getPropertyValue(name).trim() || "#888";
+      const col = name => new t.T.Color(hex(name));
+      const bg = col("--bg"), dark = bg.r + bg.g + bg.b < 1.2;
+      const red = hex("--red"), blue = hex("--blue"), turn = col(s.turn === 1 ? "--red" : "--blue");
+      const empty = col(dark ? "--cell-hover" : "--cell");
+      const inLine = new Set(s.wins.flat()), twisting = this.mode === "twist" && !s.winner;
+      for (let i = 0; i < 54; i++) {
+        const mat = t.stickers[i].material, v = s.cells[i], f = (i / 9) | 0;
+        if (v) { mat.map = this.texture(v, v === 1 ? red : blue); mat.color.setRGB(1, 1, 1); }
+        else { mat.map = null; mat.color.copy(empty); if (i === this.hover) mat.color.lerp(turn, 0.45); }
+        mat.emissive.setRGB(0, 0, 0);
+        if (twisting && f === this.sel) mat.emissive.copy(turn).multiplyScalar(0.45);
+        else if (twisting && f === this.hoverSide) mat.emissive.copy(turn).multiplyScalar(0.22);
+        else if (inLine.has(i)) mat.emissive.setRGB(0.3, 0.3, 0.3);
+        else if (i === s.last && !s.winner) mat.emissive.setRGB(0.18, 0.18, 0.18);
         mat.needsUpdate = true;
       }
-      // A rod through each finished line, in the colour of the player who made it.
+      // A white bar across each winning line.
       while (t.rods.children.length) {
         const r = t.rods.children.pop();
         r.geometry.dispose(); r.material.dispose();
       }
       const up = new t.T.Vector3(0, 1, 0);
-      for (const [li, p] of s.lines) {
-        const l = CUBE_LINES[li], a = t.meshes[l[0]].position, b = t.meshes[l[2]].position;
+      for (const l of s.wins) {
+        const n = RB_N[(l[0] / 9) | 0], off = new t.T.Vector3(n[0], n[1], n[2]).multiplyScalar(0.56);
+        const a = new t.T.Vector3(...rbPos(l[0])).add(off), b = new t.T.Vector3(...rbPos(l[2])).add(off);
         const dir = new t.T.Vector3().subVectors(b, a), len = dir.length();
-        const rod = new t.T.Mesh(new t.T.CylinderGeometry(0.07, 0.07, len + 0.7, 12),
-          new t.T.MeshBasicMaterial({ color: p === 1 ? red : blue }));
+        const rod = new t.T.Mesh(new t.T.CylinderGeometry(0.07, 0.07, len + 0.6, 12), new t.T.MeshBasicMaterial({ color: 0xffffff }));
         rod.position.addVectors(a, b).multiplyScalar(0.5);
         rod.quaternion.setFromUnitVectors(up, dir.normalize());
         t.rods.add(rod);
       }
       t.draw();
+    },
+
+    // Show a twist turning. The stickers already show the new places, so the layer
+    // starts turned back by a quarter and swings into place.
+    animate(tw) {
+      const t = this.three, f = tw >> 1, n = RB_N[f], sn = (tw & 1) ? 1 : -1;
+      const axis = new t.T.Vector3(n[0], n[1], n[2]);
+      if (t.busy) t.finish();
+      const layer = t.cubies.filter(c => rbDot(c.userData.p, n) === 1);
+      t.pivot.rotation.set(0, 0, 0);
+      for (const c of layer) t.pivot.attach(c);
+      t.rods.visible = false;
+      t.busy = true;
+      const start = performance.now(), dur = 380;
+      let raf = 0;
+      t.finish = () => {
+        cancelAnimationFrame(raf);
+        t.pivot.setRotationFromAxisAngle(axis, 0);
+        for (const c of layer) { t.group.attach(c); c.position.set(...c.userData.p); c.rotation.set(0, 0, 0); }
+        t.rods.visible = true; t.busy = false; t.finish = null;
+        t.draw();
+      };
+      const step = now => {
+        const k = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - k, 3);
+        t.pivot.setRotationFromAxisAngle(axis, -sn * (Math.PI / 2) * (1 - e));
+        t.draw();
+        if (k < 1) raf = requestAnimationFrame(step); else t.finish();
+      };
+      step(start);
     }
   };
 
@@ -2346,14 +2510,14 @@ button, .cell { touch-action: manipulation; }
     ultimate: { easy: "Mostly random moves.", medium: "Thinks a few moves ahead.", hard: "Thinks for longer. Tough to beat." },
     supreme: { easy: "Mostly random moves.", medium: "Thinks a little ahead.", hard: "Thinks for longer before each move." },
     mega: { easy: "Mostly random moves.", medium: "Grabs boards when it can.", hard: "Grabs boards and tries not to give you easy ones." },
-    cube: { easy: "Mostly random moves.", medium: "Plays well but sometimes slips up.", hard: "Thinks for longer. Tough to beat." }
+    cube: { easy: "Mostly random moves.", medium: "Takes wins and blocks yours, but sometimes slips up.", hard: "Thinks further ahead. Tough to beat." }
   };
   const DESC = {
     normal: "The classic game. Get three in a row.",
     ultimate: "Nine boards in one. Your move decides where your opponent plays next.",
     supreme: "Nine Ultimate games in one. 729 cells. Win a small board to send play to another game.",
     mega: "Nine Supreme games in one. 6,561 cells. Win a whole Ultimate game to send play to another Supreme game.",
-    cube: "Experimental. A 3×3×3 cube. Fill it up; whoever makes more lines of three wins."
+    cube: "Experimental. A cube you can twist like a puzzle cube. Place a mark or twist a side; first to get 3 in a row on one side wins."
   };
 
   function summary() {
