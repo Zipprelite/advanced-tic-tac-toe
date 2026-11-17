@@ -408,6 +408,20 @@ button, .cell { touch-action: manipulation; }
 .msg.sys { color: var(--muted); font-style: italic; }
 .chat-form { display: flex; gap: 8px; }
 .chat-form .text-in { flex: 1; min-width: 0; }
+.chat-form .cbtn { padding: 0 10px; min-width: 42px; font-size: 18px; line-height: 1; }
+.chat-form .cbtn.gifb { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
+.chat-form .cbtn[aria-expanded="true"] { background: var(--ink); color: var(--surface); }
+.chat-pop { background: var(--cell); border-radius: 10px; padding: 8px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 2px; max-height: 180px; overflow-y: auto; }
+.emoji-grid button { appearance: none; border: 0; background: none; font-size: 22px; line-height: 1; padding: 6px 0; border-radius: 8px; cursor: pointer; }
+.emoji-grid button:hover, .emoji-grid button:focus-visible { background: var(--surface); }
+.gif-pop { display: flex; flex-direction: column; gap: 8px; }
+.gif-grid { columns: 3 90px; column-gap: 6px; max-height: 240px; overflow-y: auto; }
+.gif-grid button { appearance: none; border: 0; padding: 0; margin: 0 0 6px; background: var(--surface); border-radius: 8px; overflow: hidden; cursor: pointer; display: block; width: 100%; }
+.gif-grid img { display: block; width: 100%; height: auto; }
+.gif-grid button:focus-visible { outline: 3px solid var(--blue); }
+.gif-foot { font-size: 11px; color: var(--muted); text-align: right; }
+.msg img.gif { display: block; height: 120px; width: auto; max-width: 100%; border-radius: 8px; margin-top: 4px; background: var(--surface); }
 .clocks { display: flex; justify-content: center; gap: 12px; margin: -4px 0 14px; }
 .clock { font: 700 22px var(--font-display); font-variant-numeric: tabular-nums; padding: 6px 16px; border-radius: 10px; background: var(--surface); border: 2px solid var(--line); min-width: 7.5em; text-align: center; }
 .clock small { display: block; font: 600 12px var(--font-body); color: var(--muted); }
@@ -845,7 +859,16 @@ button, .cell { touch-action: manipulation; }
         <div class="chat" id="chat">
           <span class="label">Chat</span>
           <div class="chat-log" id="chatLog" aria-live="polite"></div>
+          <div class="chat-pop" id="emojiPop" hidden><div class="emoji-grid" id="emojiGrid"></div></div>
+          <div class="chat-pop gif-pop" id="gifPop" hidden>
+            <input type="search" class="text-in" id="gifSearch" maxlength="50" autocomplete="off" placeholder="Search GIPHY" aria-label="Search for a GIF">
+            <div class="gif-grid" id="gifGrid"></div>
+            <p class="note" id="gifNote"></p>
+            <div class="gif-foot">Powered by GIPHY</div>
+          </div>
           <form class="chat-form" id="chatForm" novalidate>
+            <button type="button" class="btn cbtn" id="emojiBtn" aria-label="Emoji" aria-expanded="false" aria-controls="emojiPop">😊</button>
+            <button type="button" class="btn cbtn gifb" id="gifBtn" aria-label="GIF" aria-expanded="false" aria-controls="gifPop" hidden>GIF</button>
             <input type="text" class="text-in" id="chatIn" maxlength="300" autocomplete="off" placeholder="Say something…" aria-label="Chat message">
             <button type="submit" class="btn primary">Send</button>
           </form>
@@ -2326,7 +2349,7 @@ button, .cell { touch-action: manipulation; }
     const row = document.createElement("div");
     row.className = "msg" + (mine ? " mine" : "") + (sys ? " sys" : "");
     if (name) { const b = document.createElement("b"); b.textContent = name; row.appendChild(b); }
-    row.appendChild(document.createTextNode(text));
+    row.appendChild(sys ? document.createTextNode(text) : msgBody(text, log));
     log.appendChild(row);
     while (log.children.length > 150) log.firstChild.remove();
     if (atBottom || mine) log.scrollTop = log.scrollHeight;
@@ -3331,36 +3354,119 @@ button, .cell { touch-action: manipulation; }
       row.className = "msg" + (lastMine ? " mine" : "");
       const b = document.createElement("b");
       b.textContent = m.name;
-      row.append(b, document.createTextNode(m.text));
+      row.append(b, msgBody(m.text, log));
       log.appendChild(row);
     }
     if (atBottom || lastMine) log.scrollTop = log.scrollHeight;
   }
+  // A chat message is plain text, or "gif:<GIPHY id>" for a GIF.
+  const GIF_RE = /^gif:([A-Za-z0-9]{4,40})$/;
+  function msgBody(text, log) {
+    const g = GIF_RE.exec(text);
+    if (!g) return document.createTextNode(text);
+    const img = document.createElement("img");
+    img.className = "gif"; img.alt = "GIF"; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+    img.src = "https://media.giphy.com/media/" + g[1] + "/200.gif";
+    img.addEventListener("load", () => { if (log.scrollHeight - log.scrollTop - log.clientHeight < 200) log.scrollTop = log.scrollHeight; });
+    img.addEventListener("error", () => img.replaceWith(document.createTextNode("(GIF couldn't load)")));
+    return img;
+  }
+
+  // ---------- Emoji and GIF pickers ----------
+  // GIF search uses GIPHY. Put a GIPHY API key here (developers.giphy.com) to turn on the GIF button.
+  const GIPHY_KEY = "";
+  const EMOJIS = ("😀 😁 😂 🤣 😅 😊 😍 😘 😎 🤩 🥳 😇 🙂 😉 😜 🤪 🤔 🤨 😐 🙄 😏 😬 😴 🤯 😱 😳 🥺 😢 😭 😤 😡 🤬 💀 🤡 👻 🤖 👽 💩 " +
+    "👍 👎 👏 🙌 🙏 💪 👋 🤝 ✌️ 🤞 👌 🫡 🤷 🤦 👀 🧠 ❤️ 🧡 💛 💚 💙 💜 🖤 💔 💯 🔥 ✨ ⭐ 🎉 🎊 🏆 🥇 🥈 🥉 🎯 🎮 🎲 ♟️ " +
+    "❌ ⭕ 🟥 🟦 ✅ ❓ ❗ ⏰ ⌛ 🐐 🍀 🍕 🍿 🍩 ☕ 🌈 ☀️ 🌙 ⚡ 💥 💤 🚀 👑 🫠 🥶 🥵 😈 🙈 🙉 🙊").split(" ");
+  function closePops(except) {
+    for (const [pop, btn] of [["emojiPop", "emojiBtn"], ["gifPop", "gifBtn"]]) if (pop !== except) { $(pop).hidden = true; $(btn).setAttribute("aria-expanded", "false"); }
+  }
+  function togglePop(pop, btn) {
+    const open = $(pop).hidden;
+    closePops(pop);
+    $(pop).hidden = !open; $(btn).setAttribute("aria-expanded", String(open));
+    return open;
+  }
+  for (const em of EMOJIS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = em; b.setAttribute("aria-label", em);
+    b.addEventListener("click", () => {
+      const inp = $("chatIn"), a = inp.selectionStart ?? inp.value.length, z = inp.selectionEnd ?? inp.value.length;
+      if (inp.value.length + em.length > 300) return;
+      inp.value = inp.value.slice(0, a) + em + inp.value.slice(z);
+      inp.focus(); inp.setSelectionRange(a + em.length, a + em.length);
+    });
+    $("emojiGrid").appendChild(b);
+  }
+  $("emojiBtn").addEventListener("click", () => togglePop("emojiPop", "emojiBtn"));
+  $("gifBtn").hidden = !GIPHY_KEY;
+  let gifReq = 0, gifTimer = 0;
+  async function loadGifs(q) {
+    const id = ++gifReq, grid = $("gifGrid");
+    $("gifNote").textContent = "Loading…";
+    try {
+      const url = "https://api.giphy.com/v1/gifs/" + (q ? "search" : "trending") + "?api_key=" + encodeURIComponent(GIPHY_KEY) +
+        "&limit=24&rating=pg&bundle=messaging_non_clips" + (q ? "&q=" + encodeURIComponent(q) : "");
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.status);
+      const data = (await res.json()).data || [];
+      if (id !== gifReq) return;
+      grid.innerHTML = "";
+      for (const g of data) {
+        const im = g.images && (g.images.fixed_width_small || g.images.fixed_width);
+        if (!im || !GIF_RE.test("gif:" + g.id)) continue;
+        const b = document.createElement("button"), img = document.createElement("img");
+        b.type = "button"; b.setAttribute("aria-label", "Send GIF: " + (g.title || "GIF"));
+        img.src = im.url; img.alt = ""; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+        if (im.width && im.height) { img.width = +im.width; img.height = +im.height; }
+        b.appendChild(img);
+        b.addEventListener("click", () => { closePops(); sendChat("gif:" + g.id); });
+        grid.appendChild(b);
+      }
+      $("gifNote").textContent = grid.children.length ? "" : "No GIFs found. Try another word.";
+    } catch (e) {
+      if (id === gifReq) $("gifNote").textContent = "Couldn't load GIFs right now. Try again in a bit.";
+    }
+  }
+  $("gifBtn").addEventListener("click", () => {
+    if (!togglePop("gifPop", "gifBtn")) return;
+    $("gifSearch").value = "";
+    loadGifs("");
+    $("gifSearch").focus({ preventScroll: true });
+  });
+  $("gifSearch").addEventListener("input", () => {
+    clearTimeout(gifTimer);
+    gifTimer = setTimeout(() => loadGifs($("gifSearch").value.trim()), 400);
+  });
+  $("gifSearch").addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); if (e.key === "Escape") closePops(); });
+
   $("chatForm").addEventListener("submit", e => {
     e.preventDefault();
     const inp = $("chatIn"), text = inp.value.trim().slice(0, 300);
     if (!text) return;
+    closePops();
+    inp.value = "";
+    sendChat(text);
+  });
+  function sendChat(text) {
     if (online && online.async) {
       if (!agame || !online.side) return;
-      inp.value = "";
       return gref(agame.code).collection("chat").add({ uid: agame.me, name: username, text, ts: stamp() }).catch(() => {
         chatLine("", "Couldn't send that message.", false, true);
       });
     }
     if (online && !online.party) {
-      inp.value = "";
       if (online.left) return chatLine("", online.oppName + " has left, so they won't see messages.", false, true);
       send({ t: "chat", text });
       return chatLine(username, text, true);
     }
     if (!party) return;
-    inp.value = "";
     pref(party.code).collection("chat").add({ uid: party.me, name: username, text, ts: stamp() }).catch(() => {
       const row = document.createElement("div");
       row.className = "msg sys"; row.textContent = "Couldn't send that message.";
       $("chatLog").appendChild(row);
     });
-  });
+  }
 
   // ================= Anytime games =================
   // Games that don't need both players online at once. Every move is saved in Firebase,
