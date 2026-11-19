@@ -657,6 +657,14 @@ button, .cell { touch-action: manipulation; }
               <button type="button" class="btn" id="dmInviteCancel">Cancel</button>
             </div>
           </div>
+          <div class="dm-invite" id="dmWatch" hidden>
+            <b class="inv-title" id="watchTitle">Invite to watch</b>
+            <p class="note" id="watchNote"></p>
+            <ul class="members agames" id="watchList"></ul>
+            <div class="dm-invite-btns">
+              <button type="button" class="btn" id="dmWatchCancel">Cancel</button>
+            </div>
+          </div>
           <span class="label">Invites</span>
           <ul class="members fr-list" id="invList"></ul>
           <p class="note" id="invEmpty"></p>
@@ -3782,7 +3790,7 @@ button, .cell { touch-action: manipulation; }
   });
   function sendChat(text) {
     if (online && online.async) {
-      if (!agame || !online.side) return;
+      if (!agame) return;
       return gref(agame.code).collection("chat").add({ uid: agame.me, name: username, text, ts: stamp() }).catch(() => {
         chatLine("", "Couldn't send that message.", false, true);
       });
@@ -3825,14 +3833,28 @@ button, .cell { touch-action: manipulation; }
     finally { alistBusy = false; }
     if (alist && alist.uid === user.uid) return;
     stopAsyncList();
-    const l = alist = { uid: user.uid, games: [], loaded: false, unsub: null };
-    l.unsub = fb.db.collection("games").where("players", "array-contains", user.uid).onSnapshot(snap => {
-      if (alist !== l) return;
-      l.games = snap.docs.map(d => Object.assign({ code: d.id }, d.data({ serverTimestamps: "estimate" })));
+    const l = alist = { uid: user.uid, games: [], mine: [], watching: [], loaded: false, unsub: null };
+    const docs = snap => snap.docs.map(d => Object.assign({ code: d.id }, d.data({ serverTimestamps: "estimate" })));
+    const update = () => {
+      const codes = new Set(l.mine.map(g => g.code));
+      l.games = l.mine.concat(l.watching.filter(g => !codes.has(g.code)));
       checkTurns(l);
-      l.loaded = true;
       renderAsyncList();
+      if (watchTo) renderFriends();
+    };
+    const u1 = fb.db.collection("games").where("players", "array-contains", user.uid).onSnapshot(snap => {
+      if (alist !== l) return;
+      l.mine = docs(snap);
+      l.loaded = true;
+      update();
     }, e => { if (alist === l) { l.loaded = true; asyncErr(fbErrorText(e)); renderAsyncList(); } });
+    // Games a friend invited you to watch. (Quietly does nothing if the database rules don't allow it yet.)
+    const u2 = fb.db.collection("games").where("watchers", "array-contains", user.uid).onSnapshot(snap => {
+      if (alist !== l) return;
+      l.watching = docs(snap);
+      update();
+    }, () => {});
+    l.unsub = () => { u1(); u2(); };
     renderAsyncList();
   }
   function stopAsyncList() {
@@ -3855,8 +3877,19 @@ button, .cell { touch-action: manipulation; }
     return st.winner;
   }
   const both = g => !!(g.red && g.blue);
+  const isWatcher = (g, uid) => g.red !== uid && g.blue !== uid && (g.watchers || []).includes(uid);
   function asyncStatus(g, uid) {
-    const side = g.red === uid ? 1 : 2, n = (g.moves || []).length;
+    const n = (g.moves || []).length;
+    if (isWatcher(g, uid)) {
+      const names = { 1: g.redName, 2: g.blueName };
+      if (g.done || g.resigned) {
+        const w = asyncWinner(g);
+        return { k: 4, text: "Watching. " + (g.resigned ? names[g.resigned] + " resigned. " : "") + (w === 3 ? "It's a draw." : w ? names[w] + " won." : "Finished.") };
+      }
+      const f = g.first === 2 ? 2 : 1, turn = n % 2 === 0 ? f : 3 - f;
+      return { k: 2, text: "Watching · " + names[turn] + "'s turn · " + n + (n === 1 ? " move" : " moves") };
+    }
+    const side = g.red === uid ? 1 : 2;
     if (!both(g)) return (g.owner || g.red) === uid ? { k: 3, text: "Invite sent to " + (g.inviteeName || "them") + ". Waiting for them to accept." } : { k: 1, text: "Invited you. Accept it in Friends." };
     if (g.done || g.resigned) {
       const w = asyncWinner(g);
@@ -3880,8 +3913,9 @@ button, .cell { touch-action: manipulation; }
       const info = document.createElement("div"), b = document.createElement("b"), stt = document.createElement("div");
       info.className = "ainfo"; stt.className = "ast";
       b.textContent = GAMES[g.game] ? GAMES[g.game].title : g.game;
-      const side = g.red === l.uid ? 1 : 2;
-      info.append(b, " vs " + (both(g) ? (side === 1 ? g.blueName : g.redName) : g.inviteeName || "…"));
+      const side = g.red === l.uid ? 1 : 2, watching = isWatcher(g, l.uid);
+      if (watching) info.append(b, ": " + g.redName + " vs " + g.blueName);
+      else info.append(b, " vs " + (both(g) ? (side === 1 ? g.blueName : g.redName) : g.inviteeName || "…"));
       stt.textContent = st.text;
       info.appendChild(stt);
       const btns = document.createElement("div");
@@ -3892,6 +3926,16 @@ button, .cell { touch-action: manipulation; }
         x.addEventListener("click", fn);
         btns.appendChild(x);
       };
+      if (watching) {
+        add("Watch", false, () => openAsync(g.code));
+        add("Stop watching", false, () => {
+          if (!confirm("Stop watching this game? It goes from your list.")) return;
+          gref(g.code).update({ watchers: firebase.firestore.FieldValue.arrayRemove(l.uid) }).catch(e => asyncErr(fbErrorText(e)));
+        });
+        li.append(info, btns);
+        ul.appendChild(li);
+        continue;
+      }
       if (both(g)) add(st.k === 1 ? "Play" : "Open", st.k === 1, () => openAsync(g.code));
       if (!both(g) || st.k === 4) add(both(g) ? "Remove" : "Cancel", false, () => {
         if (!both(g)) {
@@ -4233,6 +4277,7 @@ button, .cell { touch-action: manipulation; }
   const pairId = (a, b) => a < b ? a + "_" + b : b + "_" + a;
   let fr = null;      // { uid, pairs, invIn, invOut, loaded, unsubs }
   let invTo = null;   // the friend you're inviting: { uid, name }
+  let watchTo = null; // the friend you're inviting to watch one of your unsynced games: { uid, name }
   function frErr(t, ok) { $("frErr").textContent = t || ""; $("frErr").classList.toggle("ok", !!ok); }
   const otherOf = p => p.users[0] === fr.uid ? p.users[1] : p.users[0];
   const pname2 = p => (p.names || {})[otherOf(p)] || "Player";
@@ -4254,7 +4299,7 @@ button, .cell { touch-action: manipulation; }
     if (fr) fr.unsubs.forEach(x => { try { x(); } catch (e) {} });
     pdots.forEach(w => { try { w.unsub(); } catch (e) {} });
     pdots.clear();
-    fr = null; invTo = null;
+    fr = null; invTo = null; watchTo = null;
     renderFriends();
   }
 
@@ -4366,6 +4411,7 @@ button, .cell { touch-action: manipulation; }
   // What an invite is: "Mega live, 10 min. You'd play Blue, Red goes first."
   function inviteDesc(iv, mine) {
     const g = GAMES[iv.game] ? GAMES[iv.game].title : iv.game;
+    if (iv.kind === "watch") return mine ? "Your unsynced " + g + " game." : "Their unsynced " + g + " game. You can watch it and chat, but not play.";
     return g + (iv.kind === "live" ? " live" + (iv.timer ? ", " + iv.timer + " min" : "") : ", unsynced") + (iv.precise ? ", Precise jumps" : "") + ". " +
       (mine ? "You play " + NAME[iv.side] : "You'd play " + NAME[3 - iv.side]) + ", " + NAME[iv.first === 2 ? 2 : 1] + " goes first.";
   }
@@ -4405,7 +4451,8 @@ button, .cell { touch-action: manipulation; }
     list.innerHTML = "";
     for (const p of friends) {
       const o = { uid: otherOf(p), name: pname2(p) };
-      const li = row(list, o.name, "", [["Invite to play", true, () => { invTo = o; frErr(""); renderFriends(); renderInvite(); $("dmInvite").scrollIntoView({ block: "nearest", behavior: "smooth" }); }],
+      const li = row(list, o.name, "", [["Invite to play", true, () => { invTo = o; watchTo = null; frErr(""); renderFriends(); renderInvite(); $("dmInvite").scrollIntoView({ block: "nearest", behavior: "smooth" }); }],
+        ["Invite to watch", false, () => { watchTo = o; invTo = null; frErr(""); renderFriends(); $("dmWatch").scrollIntoView({ block: "nearest", behavior: "smooth" }); }],
         ["Remove", false, () => { if (confirm("Remove " + o.name + " from your friends?")) fref(p.id).delete().catch(() => {}); }]]);
       const dot = document.createElement("span");
       dot.className = "pdot"; dot.dataset.uid = o.uid;
@@ -4422,16 +4469,18 @@ button, .cell { touch-action: manipulation; }
     if (invTo && !friends.some(p => otherOf(p) === invTo.uid)) invTo = null;
     $("dmInvite").hidden = !invTo;
     if (invTo) $("invTitle").textContent = "Invite " + invTo.name + " to play";
+    if (watchTo && !friends.some(p => otherOf(p) === watchTo.uid)) watchTo = null;
+    renderWatchInvite();
     // Invites: to you, then from you.
     const il = $("invList");
     il.innerHTML = "";
     const byTime = (a, b) => (tms(b.created) || 0) - (tms(a.created) || 0);
-    for (const iv of f.invIn.slice().sort(byTime)) row(il, iv.fromName + " invited you", inviteDesc(iv, false),
+    for (const iv of f.invIn.slice().sort(byTime)) row(il, iv.fromName + " invited you" + (iv.kind === "watch" ? " to watch" : ""), inviteDesc(iv, false),
       [["Accept", true, () => acceptInvite(iv)], ["Decline", false, () => dropInvite(iv)]], "in");
     for (const iv of f.invOut.slice().sort(byTime)) {
       const btns = [["Cancel", false, () => dropInvite(iv)]];
       if (iv.kind === "live") btns.unshift([party && party.code === iv.code ? "Back to game room" : "Open game room", false, () => party && party.code === iv.code ? showParty() : joinParty(iv.code)]);
-      row(il, "You invited " + iv.toName, inviteDesc(iv, true) + " Waiting for them to accept.", btns);
+      row(il, "You invited " + iv.toName + (iv.kind === "watch" ? " to watch" : ""), inviteDesc(iv, true) + " Waiting for them to accept.", btns);
     }
     $("invEmpty").textContent = f.invIn.length || f.invOut.length ? "" : "No invites right now. Invite a friend to play from your friends list.";
   }
@@ -4460,14 +4509,78 @@ button, .cell { touch-action: manipulation; }
 
   async function acceptInvite(iv) {
     frErr("");
+    if (iv.kind === "watch") return acceptWatch(iv);
     iref(iv.id).delete().catch(() => {});
     if (iv.kind === "unsynced") joinAsync(iv.code); else joinParty(iv.code);
   }
   // Decline (if it's to you) or cancel (if you sent it). An unsynced game nobody joined goes too.
   function dropInvite(iv) {
     iref(iv.id).delete().catch(() => {});
+    if (iv.kind === "watch") return;
     if (iv.kind === "unsynced") gref(iv.code).delete().catch(() => {});
     else if (iv.from === (fr && fr.uid) && !(party && party.code === iv.code)) pref(iv.code).delete().catch(() => {});
+  }
+
+  // ---------- Invite a friend to watch ----------
+  // Lists your unsynced games that are still being played (not ones with that friend in them).
+  // The invite's id is w_<game>_<friend>, which is how the database checks the friend was invited.
+  function renderWatchInvite() {
+    const panel = $("dmWatch"), to = watchTo;
+    panel.hidden = !to;
+    if (!to) return;
+    $("watchTitle").textContent = "Invite " + to.name + " to watch";
+    const ul = $("watchList");
+    ul.innerHTML = "";
+    const me = fr && fr.uid;
+    const games = alist && alist.uid === me ? alist.mine.filter(g => both(g) && !g.done && !g.resigned && (g.red === me || g.blue === me)
+      && g.red !== to.uid && g.blue !== to.uid && !(g.hidden || []).includes(me)) : [];
+    games.sort((a, b) => (tms(b.updated) || 0) - (tms(a.updated) || 0));
+    $("watchNote").textContent = !alist || !alist.loaded ? "Loading your games…"
+      : games.length ? "Pick one of your unsynced games. " + to.name + " can watch it and chat, but not play."
+      : "You don't have any unsynced games going (that " + to.name + " isn't playing in). Start one from Invite to play.";
+    for (const g of games) {
+      const li = document.createElement("li"), info = document.createElement("div"), b = document.createElement("b"), st = document.createElement("div"), btns = document.createElement("div");
+      info.className = "ainfo"; st.className = "ast"; btns.className = "abtns";
+      b.textContent = GAMES[g.game] ? GAMES[g.game].title : g.game;
+      info.append(b, " vs " + (g.red === me ? g.blueName : g.redName));
+      const id = "w_" + g.code + "_" + to.uid, sent = fr.invOut.some(iv => iv.id === id), watching = (g.watchers || []).includes(to.uid);
+      st.textContent = watching ? to.name + " is watching." : sent ? "Invite sent." : asyncStatus(g, me).text;
+      info.appendChild(st);
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "btn primary"; x.textContent = "Invite";
+      x.disabled = sent || watching;
+      x.addEventListener("click", () => sendWatchInvite(to, g, x));
+      btns.appendChild(x);
+      li.append(info, btns);
+      ul.appendChild(li);
+    }
+  }
+  async function sendWatchInvite(to, g, btn) {
+    if (!fr) return;
+    btn.disabled = true; frErr("");
+    try {
+      await iref("w_" + g.code + "_" + to.uid).set({ from: fr.uid, to: to.uid, fromName: username, toName: to.name, kind: "watch", code: g.code, game: g.game,
+        side: g.red === fr.uid ? 1 : 2, first: g.first === 2 ? 2 : 1, timer: 0, precise: !!(g.opts && g.opts.precise), created: stamp() });
+      watchTo = null;
+      renderFriends();
+      frErr("Invite sent to " + to.name + ". When they accept, they can watch the game.", true);
+    } catch (e) {
+      btn.disabled = false;
+      frErr(e && e.code === "permission-denied" ? "Couldn't send that invite. If you just updated the website, the database rules may need updating too." : fbErrorText(e));
+    }
+  }
+  $("dmWatchCancel").addEventListener("click", () => { watchTo = null; renderFriends(); });
+  async function acceptWatch(iv) {
+    try {
+      const user = await partyUser();
+      const snap = await gref(iv.code).get();
+      if (!snap.exists) { iref(iv.id).delete().catch(() => {}); return frErr("That game was removed."); }
+      const g = snap.data();
+      if (!(g.watchers || []).includes(user.uid)) await gref(iv.code).update({ watchers: firebase.firestore.FieldValue.arrayUnion(user.uid) });
+      iref(iv.id).delete().catch(() => {});
+      watchAsyncList();
+      openAsync(iv.code);
+    } catch (e) { frErr(fbErrorText(e)); }
   }
 
   // ---------- The invite panel ----------

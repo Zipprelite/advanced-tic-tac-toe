@@ -117,8 +117,21 @@ service cloud.firestore {
           && request.resource.data.done == true
           && request.resource.data.updated == request.time;
       }
+      // Friends invited to watch. A friend with a watch invite adds themselves; a watcher can stop watching.
+      function watcher() { return request.auth.uid in resource.data.get('watchers', []); }
+      function watchOk() {
+        let w = resource.data.get('watchers', []);
+        let iid = 'w_' + code + '_' + request.auth.uid;
+        return only(['watchers']) && !player() && !(request.auth.uid in w) && w.size() < 20
+          && request.resource.data.watchers == w.concat([request.auth.uid])
+          && get(/databases/$(database)/documents/invites/$(iid)).data.kind == 'watch';
+      }
+      function unwatchOk() {
+        return only(['watchers']) && watcher()
+          && request.resource.data.watchers == resource.data.watchers.removeAll([request.auth.uid]);
+      }
       allow get: if signedIn();
-      allow list: if signedIn() && request.auth.uid in resource.data.players;
+      allow list: if signedIn() && (request.auth.uid in resource.data.players || request.auth.uid in resource.data.get('watchers', []));
       // Games start from an invite in Messages, so only accounts can make one, and only the invited player can join.
       allow create: if signedIn() && !isGuest() && code.matches('[A-Z2-9]{5}')
         && request.resource.data.keys().hasOnly(['game', 'opts', 'owner', 'first', 'red', 'blue', 'redName', 'blueName', 'invitee', 'inviteeName', 'players', 'moves', 'done', 'resigned', 'updated'])
@@ -140,7 +153,7 @@ service cloud.firestore {
         return only(['hidden']) && player() && resource.data.done == true
           && request.resource.data.hidden == resource.data.get('hidden', []).concat([request.auth.uid]);
       }
-      allow update: if signedIn() && (moveOk() || joinOk() || resignOk() || hideOk());
+      allow update: if signedIn() && (moveOk() || joinOk() || resignOk() || hideOk() || watchOk() || unwatchOk());
       // An invite nobody has accepted can be cancelled (or declined by the invited player).
       // A finished game is deleted once both players have removed it.
       allow delete: if signedIn()
@@ -149,12 +162,13 @@ service cloud.firestore {
 
       match /chat/{id} {
         function g() { return get(/databases/$(database)/documents/games/$(code)).data; }
-        allow read: if signedIn() && (request.auth.uid == g().red || request.auth.uid == g().blue);
+        allow read: if signedIn() && (request.auth.uid == g().red || request.auth.uid == g().blue || request.auth.uid in g().get('watchers', []));
         allow create: if signedIn()
           && request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'ts'])
           && request.resource.data.uid == request.auth.uid
           && ((request.auth.uid == g().red && request.resource.data.name == g().redName)
-            || (request.auth.uid == g().blue && request.resource.data.name == g().blueName))
+            || (request.auth.uid == g().blue && request.resource.data.name == g().blueName)
+            || (request.auth.uid in g().get('watchers', []) && realName(request.resource.data.name)))
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 300
@@ -206,6 +220,7 @@ service cloud.firestore {
     // Invites to a game. You can only invite a friend.
     match /invites/{id} {
       function pair(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+      function watchGame(c) { return get(/databases/$(database)/documents/games/$(c)).data; }
       allow read: if signedIn() && (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
       allow create: if signedIn() && !isGuest()
         && request.resource.data.keys().hasOnly(['from', 'to', 'fromName', 'toName', 'kind', 'code', 'game', 'side', 'first', 'timer', 'precise', 'created'])
@@ -214,7 +229,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/friends/$(pair(request.auth.uid, request.resource.data.to))).data.status == 'friends'
         && realName(request.resource.data.fromName)
         && request.resource.data.toName is string
-        && request.resource.data.kind in ['live', 'unsynced']
+        && request.resource.data.kind in ['live', 'unsynced', 'watch']
+        // A watch invite: only a player of the game can send it, to a friend who isn't playing in it.
+        && (request.resource.data.kind != 'watch'
+          || (id == 'w_' + request.resource.data.code + '_' + request.resource.data.to
+            && request.auth.uid in [watchGame(request.resource.data.code).red, watchGame(request.resource.data.code).blue]
+            && !(request.resource.data.to in [watchGame(request.resource.data.code).red, watchGame(request.resource.data.code).blue])))
         && request.resource.data.code.matches('[A-Z2-9]{5}')
         && request.resource.data.game in ['normal', 'ultimate', 'supreme', 'mega']
         && request.resource.data.side in [1, 2] && request.resource.data.first in [1, 2]
