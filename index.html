@@ -369,6 +369,12 @@ button, .cell { touch-action: manipulation; }
 .turn-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px);
   padding: 12px 14px 12px 16px; border-radius: 14px; background: var(--ink); color: var(--surface); box-shadow: 0 8px 30px rgba(0,0,0,0.25); font-size: 15px; }
 .turn-toast b { display: block; }
+.tg-dlg { border: 0; padding: 0; background: none; color: var(--ink); width: min(400px, calc(100vw - 32px)); max-width: none; }
+.tg-dlg::backdrop { background: rgb(0 0 0 / 0.45); }
+.tg-dlg .setup-card { gap: 14px; }
+.tg-dlg h2 { margin: 0; font-size: 22px; font-weight: 800; }
+.tg-dlg .note { margin: 0; }
+.vs .linkbtn { font: inherit; font-weight: 700; }
 .turn-toast span { font-size: 13px; opacity: 0.8; }
 .turn-toast .btn { padding: 6px 14px; font-size: 14px; }
 .turn-toast .x { appearance: none; border: 0; background: none; color: inherit; font-size: 20px; line-height: 1; cursor: pointer; opacity: 0.7; padding: 4px; }
@@ -757,6 +763,25 @@ button, .cell { touch-action: manipulation; }
     </div>
   </section>
 
+  <dialog class="tg-dlg" id="tgDlg">
+    <form class="setup-card" id="tgForm" novalidate>
+      <h2>Play together here</h2>
+      <p class="note" id="tgLede"></p>
+      <input type="text" id="tgUser" autocomplete="username" hidden>
+      <div class="group" id="tgEmailRow" hidden>
+        <label class="label" for="tgEmail" id="tgEmailLabel">Email</label>
+        <input type="email" class="text-in" id="tgEmail" maxlength="100" autocomplete="off" spellcheck="false" autocapitalize="off">
+        <p class="note" id="tgEmailNote"></p>
+      </div>
+      <div class="group">
+        <label class="label" for="tgPass" id="tgPassLabel">Password</label>
+        <input type="password" class="text-in" id="tgPass" maxlength="100" autocomplete="off">
+      </div>
+      <p class="note err" id="tgErr" role="alert"></p>
+      <button type="submit" class="btn primary start" id="tgGo">Log in and play</button>
+      <button type="button" class="linkbtn" id="tgCancel">Cancel</button>
+    </form>
+  </dialog>
   <div class="turn-toast" id="turnToast" role="status" hidden>
     <div><b id="turnToastTitle">Your turn</b><span id="turnToastText"></span></div>
     <button type="button" class="btn primary" id="turnToastPlay">Play</button>
@@ -2228,7 +2253,7 @@ button, .cell { touch-action: manipulation; }
     const s = state;
     const moves = new Set(G.legal(s));
     const leftMid = !!online && online.left && !s.winner;
-    const locked = thinking || isComputerTurn() || (!!online && (s.turn !== online.side || online.left));
+    const locked = thinking || isComputerTurn() || (!!online && (!ownsSide(s.turn) || online.left));
     const colorTurn = s.winner === 1 || s.winner === 2 ? s.winner : s.turn;
     document.body.classList.toggle("turn-2", colorTurn === 2);
 
@@ -2279,11 +2304,11 @@ button, .cell { touch-action: manipulation; }
     } else if (s.winner) {
       chip.style.background = ""; chip.innerHTML = s.winner === 1 ? X_SVG : O_SVG;
       main.textContent = NAME[s.winner] + " wins.";
-      sub.textContent = (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + (s.resigned ? pname(s.resigned) + " resigned. " : "") + (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side ? "You win!" : pname(s.winner) + " wins.")
+      sub.textContent = (s.timeout ? NAME[s.timeout] + " ran out of time. " : "") + (s.resigned ? pname(s.resigned) + " resigned. " : "") + (G.scoreText ? G.scoreText(s) + " " : "") + (online ? (s.winner === online.side && !togetherOn() ? "You win!" : pname(s.winner) + " wins.")
         : settings.opp === "ai" ? (s.winner === settings.side ? "You win!" : "The computer wins.") : "");
     } else {
       chip.style.background = ""; chip.innerHTML = s.turn === 1 ? X_SVG : O_SVG;
-      if (online) main.textContent = s.turn === online.side ? "Your turn (" + NAME[s.turn] + ")" : pname(s.turn) + "'s turn";
+      if (online) main.textContent = togetherOn() ? pname(s.turn) + "'s turn (" + NAME[s.turn] + ")" : s.turn === online.side ? "Your turn (" + NAME[s.turn] + ")" : pname(s.turn) + "'s turn";
       else if (thinking) main.innerHTML = 'Computer is thinking<span class="dots"></span>';
       else if (settings.opp === "ai") main.textContent = s.turn === settings.side ? "Your turn (" + NAME[s.turn] + ")" : "Computer";
       else main.textContent = NAME[s.turn] + "'s turn";
@@ -2306,6 +2331,13 @@ button, .cell { touch-action: manipulation; }
         me.className = online.side === 1 ? "r" : "b"; me.textContent = "You (" + NAME[online.side] + ")";
         them.className = online.side === 1 ? "b" : "r"; them.textContent = pname(3 - online.side) + " (" + NAME[3 - online.side] + ")";
         vs.append(me, " vs ", them);
+        if (online.async && !s.winner && agame && agame.doc) {
+          const tb = document.createElement("button");
+          tb.type = "button"; tb.className = "linkbtn";
+          tb.textContent = togetherOn() ? "Stop playing together" : "Play together here";
+          tb.addEventListener("click", () => togetherOn() ? stopTogether(true) : openTogether());
+          vs.append(" · ", tb);
+        }
       } else {
         me.className = "r"; me.textContent = pname(1) + " (Red)";
         them.className = "b"; them.textContent = pname(2) + " (Blue)";
@@ -2439,7 +2471,7 @@ button, .cell { touch-action: manipulation; }
     if (!history.length) return false;
     // Online: only the player whose turn it is can undo the other player's last move.
     if (online && online.party && online.clock) return false;   // timed games have no undo
-    if (online) return !online.left && !state.winner && state.turn === online.side;
+    if (online) return !online.left && !state.winner && ownsSide(state.turn);
     if (settings.opp !== "ai") return true;
     return history.some(h => h.turn === settings.side);
   }
@@ -2494,7 +2526,7 @@ button, .cell { touch-action: manipulation; }
   const zoomable = () => zoomy() && board.offsetWidth > 0 && board.offsetWidth < 640;
   // The Ultimate games on screen: -1 any open one can be played, a number for one, -2 none.
   const zlocal = () => G === Mega ? Mega.local(state) : { game: state.game, games: state.games };
-  const humanTurn = () => !state.winner && !thinking && !isComputerTurn() && !(online && (state.turn !== online.side || online.left));
+  const humanTurn = () => !state.winner && !thinking && !isComputerTurn() && !(online && (!ownsSide(state.turn) || online.left));
   const canPick = g => { const z = zlocal(); return z.game < 0 ? !z.games[g] : z.game === g; };
 
   function setZoom(g, instant) {
@@ -4032,6 +4064,7 @@ button, .cell { touch-action: manipulation; }
     const a = agame;
     if (!a) return;
     agame = null;
+    stopTogether();
     a.unsubs.forEach(u => { try { u(); } catch (e) {} });
     if (explicit) { try { sessionStorage.removeItem("att-async"); } catch (e) {} }
   }
@@ -4052,14 +4085,102 @@ button, .cell { touch-action: manipulation; }
     let done = false;
     if (ms.length === k + 1) { const t = G.clone(state); G.apply(t, ms[k]); done = !!t.winner; }
     else if (ms.length !== k - 1) return;
-    gref(a.code).update({ moves: ms, done, updated: stamp() }).catch(e => chatLine("", "Couldn't save that move: " + fbErrorText(e), false, true));
+    dbFor(state.turn).collection("games").doc(a.code).update({ moves: ms, done, updated: stamp() }).catch(e => chatLine("", "Couldn't save that move: " + fbErrorText(e), false, true));
+  }
+
+  // ===== Playing together on one device =====
+  // When both players of an unsynced game are in the same room, the other player can log in
+  // here too, just for this game. Then you both take your turns on this screen, like a
+  // "This device" game, and every move still saves to the unsynced game.
+  // Their login is kept in a separate copy of Firebase that forgets it when the game closes or the page reloads.
+  let together = null;   // { code, side, uid, name, app, db }
+  let tgAsk = null, tgBusy = false, tgCount = 0;
+  const togetherOn = () => !!(together && online && online.async && online.side && agame && together.code === agame.code);
+  const ownsSide = t => !!online && (t === online.side || togetherOn());
+  const dbFor = side => togetherOn() && side === together.side ? together.db : fb.db;
+
+  async function openTogether() {
+    const a = agame, d = a && a.doc;
+    if (!d || !online || !online.side || togetherOn()) return;
+    const side = 3 - online.side, uid = side === 1 ? d.red : d.blue, name = (side === 1 ? d.redName : d.blueName) || "Player";
+    const ask = tgAsk = { code: a.code, side, uid, name, hasEmail: false, ready: false };
+    $("tgLede").textContent = name + " types their password here, so you can both take your turns on this screen. " + name + " is only logged in for this game, and is logged out when you leave it.";
+    $("tgUser").value = name;
+    $("tgPassLabel").textContent = name + "'s password";
+    $("tgEmailRow").hidden = true;
+    $("tgPass").value = ""; $("tgEmail").value = "";
+    $("tgErr").textContent = "Checking " + name + "'s account…";
+    $("tgGo").disabled = true;
+    if (!$("tgDlg").open) $("tgDlg").showModal();
+    try {
+      const snap = await nameDoc(name.toLowerCase()).get();
+      if (tgAsk !== ask) return;
+      if (!snap.exists || snap.data().uid !== uid) { $("tgErr").textContent = "Couldn't find " + name + "'s account."; return; }
+      ask.hasEmail = !!snap.data().hasEmail;
+    } catch (e) { if (tgAsk === ask) $("tgErr").textContent = fbErrorText(e); return; }
+    ask.ready = true;
+    $("tgErr").textContent = "";
+    $("tgGo").disabled = false;
+    if (ask.hasEmail) {
+      $("tgEmailRow").hidden = false;
+      $("tgEmailLabel").textContent = name + "'s email";
+      $("tgEmailNote").textContent = name + "'s account logs in with an email address, so type that too.";
+      $("tgEmail").focus();
+    } else $("tgPass").focus();
+  }
+  function closeTogetherAsk() { tgAsk = null; $("tgPass").value = ""; if ($("tgDlg").open) $("tgDlg").close(); }
+  $("tgCancel").addEventListener("click", closeTogetherAsk);
+  $("tgDlg").addEventListener("close", () => { tgAsk = null; $("tgPass").value = ""; });
+
+  $("tgForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const ask = tgAsk;
+    if (!ask || !ask.ready || tgBusy) return;
+    const pass = $("tgPass").value, email = ask.hasEmail ? $("tgEmail").value.trim() : ask.name.toLowerCase() + NO_EMAIL;
+    const err = (t, f) => { $("tgErr").textContent = t; if (f) $(f).focus(); };
+    if (ask.hasEmail && !email) return err("Type " + ask.name + "'s email.", "tgEmail");
+    if (!pass) return err("Type " + ask.name + "'s password.", "tgPass");
+    tgBusy = true; $("tgGo").disabled = true; err("Logging in…");
+    let app = null;
+    try {
+      app = firebase.initializeApp(FIREBASE_CONFIG, "together" + (++tgCount));
+      const auth = app.auth();
+      await auth.setPersistence(firebase.auth.Auth.Persistence.NONE);   // never remembered on this device
+      const cred = await auth.signInWithEmailAndPassword(email, pass);
+      if (cred.user.uid !== ask.uid) throw { code: "wrong-account" };
+      if (tgAsk !== ask || !agame || agame.code !== ask.code) throw { code: "gone" };
+      stopTogether();
+      together = { code: ask.code, side: ask.side, uid: ask.uid, name: ask.name, app, db: app.firestore() };
+      app = null;
+      closeTogetherAsk();
+      chatLine("", ask.name + " is logged in on this device. You can both take your turns here now.", false, true);
+      render();
+    } catch (e2) {
+      const c = (e2 && e2.code) || "";
+      if (c !== "gone") err(c === "wrong-account" ? "That's not " + ask.name + "'s account." : c.includes("invalid-email") ? "That email address doesn't look right." : authErrorText(e2).replace("username or password", ask.hasEmail ? "email or password" : "password"), "tgPass");
+    } finally {
+      tgBusy = false;
+      if (tgAsk === ask) $("tgGo").disabled = false;
+      if (app) app.auth().signOut().catch(() => {}).then(() => app.delete()).catch(() => {});
+    }
+  });
+
+  // Log the other player out of this device.
+  function stopTogether(say) {
+    if (tgAsk) closeTogetherAsk();
+    const t = together;
+    if (!t) return;
+    together = null;
+    t.app.auth().signOut().catch(() => {}).then(() => t.app.delete()).catch(() => {});
+    if (say) { chatLine("", t.name + " is logged out of this device.", false, true); render(); }
   }
 
   $("resignBtn").addEventListener("click", () => {
     const a = agame;
     if (!a || !online || !online.async || !online.side || state.winner) return;
-    if (!confirm("Resign this game? " + pname(3 - online.side) + " will win.")) return;
-    gref(a.code).update({ resigned: online.side, done: true, updated: stamp() }).catch(e => chatLine("", fbErrorText(e), false, true));
+    const side = togetherOn() ? state.turn : online.side;
+    if (!confirm((togetherOn() ? "Resign this game for " + pname(side) + "? " : "Resign this game? ") + pname(3 - side) + " will win.")) return;
+    dbFor(side).collection("games").doc(a.code).update({ resigned: side, done: true, updated: stamp() }).catch(e => chatLine("", fbErrorText(e), false, true));
   });
 
   // ================= Friends =================
