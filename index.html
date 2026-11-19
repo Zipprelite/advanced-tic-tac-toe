@@ -765,7 +765,7 @@ button, .cell { touch-action: manipulation; }
 
   <dialog class="tg-dlg" id="tgDlg">
     <form class="setup-card" id="tgForm" novalidate>
-      <h2>Play together here</h2>
+      <h2 id="tgTitle">Play together here</h2>
       <p class="note" id="tgLede"></p>
       <input type="text" id="tgUser" autocomplete="username" hidden>
       <div class="group" id="tgEmailRow" hidden>
@@ -4103,8 +4103,10 @@ button, .cell { touch-action: manipulation; }
     const a = agame, d = a && a.doc;
     if (!d || !online || !online.side || togetherOn()) return;
     const side = 3 - online.side, uid = side === 1 ? d.red : d.blue, name = (side === 1 ? d.redName : d.blueName) || "Player";
-    const ask = tgAsk = { code: a.code, side, uid, name, hasEmail: false, ready: false };
+    const ask = tgAsk = { kind: "join", code: a.code, side, uid, name, hasEmail: false, ready: false };
     $("tgLede").textContent = name + " types their password here, so you can both take your turns on this screen. " + name + " is only logged in for this game, and is logged out when you leave it.";
+    $("tgTitle").textContent = "Play together here";
+    $("tgGo").textContent = "Log in and play";
     $("tgUser").value = name;
     $("tgPassLabel").textContent = name + "'s password";
     $("tgEmailRow").hidden = true;
@@ -4136,6 +4138,7 @@ button, .cell { touch-action: manipulation; }
     e.preventDefault();
     const ask = tgAsk;
     if (!ask || !ask.ready || tgBusy) return;
+    if (ask.kind === "resign") return resignWithPassword(ask);
     const pass = $("tgPass").value, email = ask.hasEmail ? $("tgEmail").value.trim() : ask.name.toLowerCase() + NO_EMAIL;
     const err = (t, f) => { $("tgErr").textContent = t; if (f) $(f).focus(); };
     if (ask.hasEmail && !email) return err("Type " + ask.name + "'s email.", "tgEmail");
@@ -4165,6 +4168,43 @@ button, .cell { touch-action: manipulation; }
     }
   });
 
+  // Playing together: resigning needs the password of the player whose turn it is,
+  // so one player can't resign for the other.
+  function askResign(side) {
+    const name = pname(side);
+    tgAsk = { kind: "resign", code: agame.code, side, name, ready: true };
+    $("tgTitle").textContent = "Resign for " + name + "?";
+    $("tgLede").textContent = "It's " + name + "'s turn, so " + name + " is the one resigning. " + pname(3 - side) + " will win. To make sure it's really " + name + ", type " + name + "'s password.";
+    $("tgPassLabel").textContent = name + "'s password";
+    $("tgUser").value = name;
+    $("tgEmailRow").hidden = true;
+    $("tgPass").value = "";
+    $("tgErr").textContent = "";
+    $("tgGo").textContent = "Resign";
+    $("tgGo").disabled = false;
+    if (!$("tgDlg").open) $("tgDlg").showModal();
+    $("tgPass").focus();
+  }
+  async function resignWithPassword(ask) {
+    const pass = $("tgPass").value, err = t => { $("tgErr").textContent = t; $("tgPass").focus(); };
+    if (!pass) return err("Type " + ask.name + "'s password.");
+    if (!togetherOn() || agame.code !== ask.code || state.winner) return closeTogetherAsk();
+    const user = (ask.side === together.side ? together.app.auth() : fb.auth).currentUser;
+    if (!user || !user.email) return err("Something went wrong. Try again.");
+    tgBusy = true; $("tgGo").disabled = true; $("tgErr").textContent = "Checking…";
+    try {
+      await user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(user.email, pass));
+      if (tgAsk !== ask || !togetherOn() || state.winner) return;
+      await dbFor(ask.side).collection("games").doc(ask.code).update({ resigned: ask.side, done: true, updated: stamp() });
+      closeTogetherAsk();
+    } catch (e) {
+      if (tgAsk === ask) err(e && String(e.code).startsWith("auth/") ? authErrorText(e).replace("username or password", "password") : fbErrorText(e));
+    } finally {
+      tgBusy = false;
+      if (tgAsk === ask) $("tgGo").disabled = false;
+    }
+  }
+
   // Log the other player out of this device.
   function stopTogether(say) {
     if (tgAsk) closeTogetherAsk();
@@ -4178,8 +4218,9 @@ button, .cell { touch-action: manipulation; }
   $("resignBtn").addEventListener("click", () => {
     const a = agame;
     if (!a || !online || !online.async || !online.side || state.winner) return;
-    const side = togetherOn() ? state.turn : online.side;
-    if (!confirm((togetherOn() ? "Resign this game for " + pname(side) + "? " : "Resign this game? ") + pname(3 - side) + " will win.")) return;
+    if (togetherOn()) return askResign(state.turn);
+    const side = online.side;
+    if (!confirm("Resign this game? " + pname(3 - side) + " will win.")) return;
     dbFor(side).collection("games").doc(a.code).update({ resigned: side, done: true, updated: stamp() }).catch(e => chatLine("", fbErrorText(e), false, true));
   });
 
